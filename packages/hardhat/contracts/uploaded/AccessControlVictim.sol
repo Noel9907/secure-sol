@@ -1,24 +1,29 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.18;
 
 contract AccessControlVictim {
-    address public owner;
 
-    event FundsDrained(address recipient, uint256 amount);
+    address public owner;
 
     constructor() payable {
         owner = msg.sender;
     }
 
-    function drainFunds(address payable recipient) external {
-        uint256 amount = address(this).balance;
-        require(amount > 0, "Nothing to drain");
-        (bool success, ) = recipient.call{value: amount}("");
-        require(success, "Transfer failed");
-        emit FundsDrained(recipient, amount);
+    
+    function deposit() public payable {}
+
+    
+    function withdrawContractFunds() external {
+
+        payable(msg.sender).transfer(address(this).balance);
+
     }
 
-    function getBalance() external view returns (uint256) {
-        return address(this).balance;
+    
+    function emergencyWithdraw() external {
+
+        payable(msg.sender).transfer(address(this).balance);
+
     }
+
 }
