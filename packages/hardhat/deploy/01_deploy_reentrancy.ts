@@ -56,6 +56,18 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     from: deployer,
     log: true,
   });
+
+  // --- Overflow scenario ---
+  await deploy("OverflowVictim", {
+    from: deployer,
+    value: parseEther("5").toString(),
+    log: true,
+  });
+
+  await deploy("OverflowAttacker", {
+    from: deployer,
+    log: true,
+  });
 };
 
 export default deploy;
