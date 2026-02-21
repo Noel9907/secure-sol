@@ -7,18 +7,21 @@ import { AppProgressBar as ProgressBar } from "next-nprogress-bar";
 import { useTheme } from "next-themes";
 import { Toaster } from "react-hot-toast";
 import { WagmiProvider } from "wagmi";
-import { Footer } from "~~/components/Footer";
-import { Header } from "~~/components/Header";
+import { RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
 import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   return (
     <>
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="relative flex flex-col flex-1">{children}</main>
-        <Footer />
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
+        {/* Top connect wallet bar applied to every page */}
+        <header className="border-b border-border bg-card/80 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-6xl items-center justify-end gap-3 px-4 py-3 sm:px-6">
+            <RainbowKitCustomConnectButton />
+          </div>
+        </header>
+        <main className="relative flex flex-1 flex-col">{children}</main>
       </div>
       <Toaster />
     </>
