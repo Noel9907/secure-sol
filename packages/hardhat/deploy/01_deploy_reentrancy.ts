@@ -44,6 +44,18 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     value: parseEther("3").toString(),
     log: true,
   });
+
+  // --- Input validation scenario ---
+  const ivVictim = await deploy("InputValidationVictim", {
+    from: deployer,
+    value: parseEther("5").toString(),
+    log: true,
+  });
+
+  await deploy("InputValidationAttacker", {
+    from: deployer,
+    log: true,
+  });
 };
 
 export default deploy;
