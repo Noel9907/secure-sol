@@ -6,6 +6,10 @@ const HARDHAT_DIR = path.resolve(__dirname, "../../hardhat");
 
 const SCRIPTS: Record<string, string> = {
   reentrancy: "scripts/simulate/runReentrancy.ts",
+  accesscontrol: "scripts/simulate/runAccessControl.ts",
+  flashloan: "scripts/simulate/runFlashLoan.ts",
+  inputvalidation: "scripts/simulate/runInputValidation.ts",
+  overflow: "scripts/simulate/runOverflow.ts",
 };
 
 export function simulateHandler(req: Request, res: Response) {
