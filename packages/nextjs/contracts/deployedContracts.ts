@@ -5,9 +5,254 @@
 import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
 const deployedContracts = {
-  31337: {
+  69: {
+    VulnerableBank: {
+      address: "0xBE41E80fA543422b864ee508665c723b41B06d0A",
+      abi: [
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "user",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "Deposited",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "user",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "Withdrawn",
+          type: "event",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          name: "balances",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "deposit",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getBankBalance",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "withdraw",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+      ],
+      inheritedFunctions: {},
+      deployedOnBlock: 10305767,
+    },
+    reentrancy: {
+      address: "0xd6cD0cc34e547857041C9eF207c807F5FB40aC72",
+      abi: [
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "_target",
+              type: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "finalBalance",
+              type: "uint256",
+            },
+          ],
+          name: "AttackFinished",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "AttackStarted",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "count",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "contractBalance",
+              type: "uint256",
+            },
+          ],
+          name: "Reentered",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "attackInProgress",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getBalance",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "maxReentries",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "reentryCount",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_max",
+              type: "uint256",
+            },
+          ],
+          name: "setMaxReentries",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "simulateAttack",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "target",
+          outputs: [
+            {
+              internalType: "contract IBank",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          stateMutability: "payable",
+          type: "receive",
+        },
+      ],
+      inheritedFunctions: {},
+      deployedOnBlock: 10305768,
+    },
+  },
+  545: {
     FlashLoanAttacker: {
-      address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      address: "0x2772D4923068F16C073BF028832Ef4D1e1915D3b",
       abi: [
         {
           inputs: [
@@ -172,10 +417,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 6,
+      deployedOnBlock: 96184914,
     },
     FlashLoanProvider: {
-      address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      address: "0x210c5BA9e7917bc4E6fbEa7A06eC68ecE73E5781",
       abi: [
         {
           inputs: [],
@@ -239,10 +484,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 5,
+      deployedOnBlock: 96184896,
     },
     FlashLoanVictim: {
-      address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      address: "0x6C443a54b6e2634B47524669F60fDB066526A395",
       abi: [
         {
           inputs: [
@@ -347,10 +592,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 4,
+      deployedOnBlock: 96184880,
     },
     InputValidationAttacker: {
-      address: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      address: "0x70b6b9240f54BB0Bb8deb3f3ADAb47CD8bD6F00d",
       abi: [
         {
           anonymous: false,
@@ -421,10 +666,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 8,
+      deployedOnBlock: 96258783,
     },
     InputValidationVictim: {
-      address: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+      address: "0xd311549b68eb1b999399Ce0DDf838D81B9b59184",
       abi: [
         {
           inputs: [],
@@ -523,10 +768,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 7,
+      deployedOnBlock: 96258765,
     },
     OverflowAttacker: {
-      address: "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+      address: "0xce018d9B4514B4038207a570A910A5d8ef9bc78e",
       abi: [
         {
           anonymous: false,
@@ -602,10 +847,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 10,
+      deployedOnBlock: 96258818,
     },
     OverflowVictim: {
-      address: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+      address: "0xE4d69Eec999cB9887E9b16c008b54feA620B2595",
       abi: [
         {
           inputs: [],
@@ -766,10 +1011,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 9,
+      deployedOnBlock: 96258800,
     },
     ReentrancyAttacker: {
-      address: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      address: "0x45369E763c35F5805303726DE1bB69D6c0589c89",
       abi: [
         {
           inputs: [
@@ -892,10 +1137,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 2,
+      deployedOnBlock: 96184845,
     },
     SimpleDEX: {
-      address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      address: "0x8E57300d17cEc8caB8Ae0a10EdEeA6ebb17AB993",
       abi: [
         {
           inputs: [],
@@ -979,10 +1224,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 3,
+      deployedOnBlock: 96184862,
     },
     VulnerableBank: {
-      address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      address: "0x9E3421298D5c30c9Ad102aabA90F3Cc7FF22EE31",
       abi: [
         {
           anonymous: false,
@@ -1070,7 +1315,159 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 1,
+      deployedOnBlock: 96184827,
+    },
+    reentrancy: {
+      address: "0x4Ef20F5CA51632Ef44609E58Fc327857fEDF1e05",
+      abi: [
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "_target",
+              type: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "finalBalance",
+              type: "uint256",
+            },
+          ],
+          name: "AttackFinished",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "AttackStarted",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "count",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "contractBalance",
+              type: "uint256",
+            },
+          ],
+          name: "Reentered",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "attackInProgress",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getBalance",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "maxReentries",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "reentryCount",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_max",
+              type: "uint256",
+            },
+          ],
+          name: "setMaxReentries",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "simulateAttack",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "target",
+          outputs: [
+            {
+              internalType: "contract IBank",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          stateMutability: "payable",
+          type: "receive",
+        },
+      ],
+      inheritedFunctions: {},
+      deployedOnBlock: 96177461,
     },
   },
 } as const;
