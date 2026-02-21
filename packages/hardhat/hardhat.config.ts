@@ -38,7 +38,7 @@ const config: HardhatUserConfig = {
       },
     ],
   },
-  defaultNetwork: "localhost",
+  defaultNetwork: "flowEVMTestnet",
   namedAccounts: {
     deployer: {
       // By default, it will take the first Hardhat account as the deployer
@@ -62,6 +62,17 @@ const config: HardhatUserConfig = {
     mainnet: {
       url: "https://mainnet.rpc.buidlguidl.com",
       accounts: [deployerPrivateKey],
+    },
+    //  sepoliaTender :{
+    //   url: "https://virtual.sepolia.eu.rpc.tenderly.co/d42d826b-b76c-4b49-8b7b-480e7cd1d66b",
+    //   accounts: [""],
+    //   chainId: 11155111,
+    // },
+    flowEVMTestnet: {
+      url: "https://testnet.evm.nodes.onflow.org",
+      chainId: 545,
+      accounts: [deployerPrivateKey],
+      gasPrice: 20000000000, // 20 gwei
     },
     sepolia: {
       url: `https://eth-sepolia.g.alchemy.com/v2/${providerApiKey}`,

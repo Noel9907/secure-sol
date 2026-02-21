@@ -57,5 +57,9 @@
   },
   "engines": {
     "node": ">=20.18.3"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.2.4",
+    "lucide-react": "^0.575.0"
   }
 }
