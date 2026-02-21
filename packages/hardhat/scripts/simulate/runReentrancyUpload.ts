@@ -134,6 +134,8 @@ async function main() {
   const exploited = stolenAmount > 0n;
 
   const fnSig = `${vulnerableFunction.name}(${vulnerableFunction.paramTypes.join(",")})`;
+  const stateVarName = (analysis && (analysis as any).stateVar) || null;
+  const perEntryAmount: bigint = reentryCount > 0n ? (initialBalance > finalBalance ? (initialBalance - finalBalance) / reentryCount : 0n) : 0n;
 
   const result = buildResult({
     contractName,
@@ -180,7 +182,7 @@ async function main() {
           {
             step: 3,
             description: exploited
-              ? `Re-entered ${reentryCount} times — ${formatEther(stolenAmount)} ETH drained`
+              ? `Re-entered ${reentryCount} times — ${formatEther(stolenAmount)} ETH drained (${formatEther(perEntryAmount)} per re-entry)`
               : `Re-entered ${reentryCount} time(s) — pattern confirmed; state update after call is exploitable`,
             from: attackerAddress,
             to: victimAddress,
@@ -199,7 +201,7 @@ async function main() {
           `${fnSig} triggered — ETH sent before state update`,
           `Re-entered ${reentryCount} time(s)`,
           exploited
-            ? `${formatEther(stolenAmount)} ETH drained — VULNERABLE`
+            ? `${formatEther(stolenAmount)} ETH drained (${formatEther(perEntryAmount)} per re-entry) — VULNERABLE`
             : "Re-entry confirmed — VULNERABLE PATTERN (checks-effects-interactions violated)",
         ]
       : [
@@ -212,10 +214,10 @@ async function main() {
       affectedFunction: fnSig,
       explanation: patternDetected
         ? exploited
-          ? `${fnSig} sends ETH to the caller before updating balances[msg.sender]. The attacker deposited ${formatEther(depositAmount)} ETH and triggered the vulnerable function; their receive() re-called it ${reentryCount} time(s), draining ${formatEther(stolenAmount)} ETH before the state was ever updated.`
-          : `${fnSig} sends ETH to the caller before updating balances[msg.sender] — a violation of the checks-effects-interactions pattern. Re-entry was confirmed (${reentryCount} re-entry). The exploit did not produce net ETH theft in this run because the amount withdrawn equals the attacker's own deposit; in a scenario with multiple depositors or larger balances, this pattern is directly exploitable. Fix the ordering now.`
+          ? `${fnSig} sends ETH to the caller before updating ${stateVarName ? `${stateVarName}[msg.sender]` : `balances[msg.sender]`}. The attacker deposited ${formatEther(depositAmount)} ETH and triggered the vulnerable function; their receive() re-called it ${reentryCount} time(s), draining ${formatEther(stolenAmount)} ETH before the state was ever updated.`
+          : `${fnSig} sends ETH to the caller before updating ${stateVarName ? `${stateVarName}[msg.sender]` : `balances[msg.sender]`} — a violation of the checks-effects-interactions pattern. Re-entry was confirmed (${reentryCount} re-entry). The exploit did not produce net ETH theft in this run because the amount withdrawn equals the attacker's own deposit; in a scenario with multiple depositors or larger balances, this pattern is directly exploitable. Fix the ordering now.`
         : `Reentrancy pattern detected (ETH sent before state update in ${fnSig}) but the attack did not succeed — contract may have a reentrancy guard or other protection.`,
-      fix: "Move the state update BEFORE the external call: set balances[msg.sender] = 0 (or -= amount) BEFORE calling msg.sender. Alternatively, add OpenZeppelin ReentrancyGuard to all withdraw functions.",
+      fix: `Move the state update BEFORE the external call: set ${stateVarName ? `${stateVarName}[msg.sender] = 0` : `balances[msg.sender] = 0`} (or -= amount) BEFORE calling msg.sender. Alternatively, add OpenZeppelin ReentrancyGuard to all withdraw functions.`,
     },
   });
 

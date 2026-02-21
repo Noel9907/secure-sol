@@ -64,13 +64,19 @@ export function buildResult(params: BuildResultParams) {
 
   // Score:
   //   - exploited:        deduct based on % stolen × severity
+  //   - exploited:        large fixed deduction plus proportional to % stolen
   //   - pattern only:     fixed deduction of 60 pts × severity (vulnerable code, no actual theft in this run)
   //   - nothing found:    100
-  const securityScore = exploited
-    ? Math.max(0, Math.round(100 - stolenPercent * severityWeight))
-    : patternDetected
-    ? Math.max(0, Math.round(100 - 60 * severityWeight))
-    : 100;
+  let securityScore: number;
+  if (exploited) {
+    // Big penalty for actual exploit: base deduction scaled by severity + small proportional deduction
+    // Example: Critical (1.0) => 80pt base deduction, plus up to 20pt depending on percent stolen
+    securityScore = Math.max(0, Math.round(100 - 80 * severityWeight - stolenPercent * 20 * severityWeight));
+  } else if (patternDetected) {
+    securityScore = Math.max(0, Math.round(100 - 60 * severityWeight));
+  } else {
+    securityScore = 100;
+  }
 
   const ethPerMs = durationMs > 0 ? stolenEth / durationMs : 0;
   const usdPerMs = ethPerMs * ETH_USD;

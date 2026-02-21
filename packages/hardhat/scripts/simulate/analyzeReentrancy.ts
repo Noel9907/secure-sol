@@ -11,6 +11,8 @@ export type ReentrancyAnalysis = {
   vulnerableFunction: FunctionInfo | null;
   depositFunction: FunctionInfo | null;
   reason: string;
+  // optional name of the mapping/state variable that is updated (e.g. "balances" or "rewardBalance")
+  stateVar?: string | null;
 };
 
 /**
@@ -45,32 +47,45 @@ export function analyzeReentrancy(sourcePath: string): ReentrancyAnalysis {
         const afterCall = fn.body.slice(semiIdx + 1);
         // Check if a mapping keyed on msg.sender is updated after the call
         // Matches patterns like: balances[msg.sender] -= / balances[msg.sender] = 0
-        if (/\[\s*msg\.sender\s*\]\s*[-+]?=/.test(afterCall)) {
+        const m = afterCall.match(/([a-zA-Z_][\w]*)\s*\[\s*msg\.sender\s*\]\s*([-+]?=|=)/);
+        if (m) {
+          const stateVar = m[1];
           vulnerableFunction = {
             name: fn.name,
             paramTypes: fn.paramTypes,
             isPayable: fn.isPayable,
           };
+          // attach stateVar to the vulnerableFunction for later reporting
+          (vulnerableFunction as any)._stateVar = stateVar;
         }
       }
     }
   }
 
   if (vulnerableFunction && depositFunction) {
+    // extract captured stateVar if present
+    const stateVar = (vulnerableFunction as any)?._stateVar ?? null;
     return {
       found: true,
       vulnerableFunction,
       depositFunction,
-      reason: `Reentrancy: ${vulnerableFunction.name}() sends ETH before updating balances[msg.sender]`,
+      reason: stateVar
+        ? `Reentrancy: ${vulnerableFunction.name}() sends ETH before updating ${stateVar}[msg.sender]`
+        : `Reentrancy: ${vulnerableFunction.name}() sends ETH before updating balances[msg.sender]`,
+      stateVar,
     };
   }
 
   if (vulnerableFunction && !depositFunction) {
+    const stateVar = (vulnerableFunction as any)?._stateVar ?? null;
     return {
       found: false,
       vulnerableFunction,
       depositFunction: null,
-      reason: `External ETH call before state update found in ${vulnerableFunction.name}() but no deposit function detected`,
+      reason: stateVar
+        ? `External ETH call before state update found in ${vulnerableFunction.name}() (updates ${stateVar}[msg.sender]) but no deposit function detected`
+        : `External ETH call before state update found in ${vulnerableFunction.name}() but no deposit function detected`,
+      stateVar,
     };
   }
 
