@@ -1,0 +1,102 @@
+{
+  "simulation": {
+    "id": "sim_001",
+    "status": "completed",
+    "startTime": 1708512000000,
+    "endTime": 1708512003420,
+    "durationMs": 3420
+  },
+  "contract": {
+    "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "name": "VulnerableBank",
+    "initialBalance": "1.0",
+    "finalBalance": "0.0",
+    "unit": "ETH"
+  },
+  "attack": {
+    "type": "reentrancy",
+    "targetFunction": "withdraw()",
+    "success": true,
+    "stolenAmount": "1.0",
+    "unit": "ETH"
+  },
+  "metrics": {
+    "securityScore": 12,
+    "vulnerabilityRate": {
+      "ethPerMs": 0.000292,
+      "usdPerMs": 0.82,
+      "inrPerMs": 68.5
+    },
+    "progress": 100,
+    "severity": "Critical"
+  },
+  "transactions": [
+    {
+      "step": 1,
+      "description": "Attacker deposits 0.1 ETH into VulnerableBank",
+      "from": "0xAttacker",
+      "to": "0xVictim",
+      "value": "0.1",
+      "unit": "ETH",
+      "timestampMs": 1708512000300,
+      "balanceAfter": {
+        "victim": "1.1",
+        "attacker": "0.9"
+      }
+    },
+    {
+      "step": 2,
+      "description": "Attacker calls withdraw() — re-entry begins",
+      "from": "0xAttacker",
+      "to": "0xVictim",
+      "value": "0.1",
+      "unit": "ETH",
+      "timestampMs": 1708512001200,
+      "balanceAfter": {
+        "victim": "0.9",
+        "attacker": "1.0"
+      }
+    },
+    {
+      "step": 3,
+      "description": "Re-entered withdraw() — iteration 1",
+      "from": "0xAttacker",
+      "to": "0xVictim",
+      "value": "0.1",
+      "unit": "ETH",
+      "timestampMs": 1708512001400,
+      "balanceAfter": {
+        "victim": "0.8",
+        "attacker": "1.1"
+      }
+    },
+    {
+      "step": 4,
+      "description": "Funds fully drained after 10 re-entries",
+      "from": "0xAttacker",
+      "to": "0xVictim",
+      "value": "0.0",
+      "unit": "ETH",
+      "timestampMs": 1708512003100,
+      "balanceAfter": {
+        "victim": "0.0",
+        "attacker": "1.1"
+      }
+    }
+  ],
+  "timeline": [
+    "VulnerableBank deployed",
+    "Victim funded with 1.0 ETH",
+    "Attacker deposited 0.1 ETH",
+    "withdraw() called — re-entry triggered",
+    "Re-entered 10 times",
+    "Funds drained"
+  ],
+  "report": {
+    "vulnerabilityType": "Reentrancy",
+    "affectedFunction": "withdraw()",
+    "severity": "Critical",
+    "explanation": "ETH is sent to the caller before balances[msg.sender] is set to 0. The attacker's receive() fallback re-calls withdraw() recursively, draining the contract before the balance is ever updated.",
+    "fix": "Apply the checks-effects-interactions pattern: update balances[msg.sender] = 0 before the external call, or use OpenZeppelin ReentrancyGuard."
+  }
+}
