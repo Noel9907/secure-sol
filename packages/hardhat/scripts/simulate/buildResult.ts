@@ -41,6 +41,12 @@ export type BuildResultParams = {
   transactions: SimTransaction[];
   timeline: string[];
   report: SimReport;
+  /**
+   * When true, the vulnerability pattern was confirmed even if no ETH was stolen.
+   * Drives vulnerabilitiesFound in the upload endpoint and lowers securityScore.
+   * Defaults to (stolenAmount > 0) when not provided.
+   */
+  patternDetected?: boolean;
 };
 
 export function buildResult(params: BuildResultParams) {
@@ -49,9 +55,22 @@ export function buildResult(params: BuildResultParams) {
   const initialEth = parseFloat(formatEther(params.initialBalance));
   const finalEth = parseFloat(formatEther(params.finalBalance));
 
+  // exploited = ETH was actually stolen; patternDetected = vulnerability exists (may not be exploitable here)
+  const exploited = stolenEth > 0;
+  const patternDetected = params.patternDetected !== undefined ? params.patternDetected : exploited;
+
   const stolenPercent = initialEth > 0 ? (stolenEth / initialEth) * 100 : 0;
   const severityWeight = SEVERITY_WEIGHTS[params.severity] ?? 1.0;
-  const securityScore = Math.max(0, Math.round(100 - stolenPercent * severityWeight));
+
+  // Score:
+  //   - exploited:        deduct based on % stolen × severity
+  //   - pattern only:     fixed deduction of 60 pts × severity (vulnerable code, no actual theft in this run)
+  //   - nothing found:    100
+  const securityScore = exploited
+    ? Math.max(0, Math.round(100 - stolenPercent * severityWeight))
+    : patternDetected
+    ? Math.max(0, Math.round(100 - 60 * severityWeight))
+    : 100;
 
   const ethPerMs = durationMs > 0 ? stolenEth / durationMs : 0;
   const usdPerMs = ethPerMs * ETH_USD;
@@ -75,7 +94,10 @@ export function buildResult(params: BuildResultParams) {
     attack: {
       type: params.attackType,
       targetFunction: params.targetFunction,
-      success: stolenEth > 0,
+      /** true only if ETH was actually stolen */
+      success: exploited,
+      /** true if the vulnerability pattern was confirmed (even without ETH theft) */
+      patternDetected,
       stolenAmount: stolenEth.toFixed(4),
       unit: "ETH",
     },

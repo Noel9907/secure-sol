@@ -6,31 +6,12 @@ import path from "path";
 const HARDHAT_DIR = path.resolve(__dirname, "../../hardhat");
 const UPLOADED_DIR = path.join(HARDHAT_DIR, "contracts", "uploaded");
 
-// Detect vulnerability patterns from the compiled ABI
-const DETECTORS = [
-  {
-    attack: "reentrancy",
-    detect: (abi: any[]) =>
-      abi.some(f => f.type === "function" && f.name === "withdraw" && f.inputs?.length === 0) &&
-      abi.some(f => f.type === "function" && f.name === "deposit" && f.stateMutability === "payable"),
-    script: "scripts/simulate/runReentrancyUpload.ts",
-  },
-  {
-    attack: "inputvalidation",
-    detect: (abi: any[]) =>
-      abi.some(
-        f => f.type === "function" && f.name === "withdraw" && f.inputs?.length === 1 && f.inputs[0].type === "uint256",
-      ) && abi.some(f => f.type === "function" && f.name === "deposit"),
-    script: "scripts/simulate/runInputValidationUpload.ts",
-  },
-  {
-    attack: "overflow",
-    detect: (abi: any[]) =>
-      (abi.some(f => f.type === "function" && f.name === "sendTokens" && f.inputs?.length === 2) ||
-        abi.some(f => f.type === "function" && f.name === "transfer" && f.inputs?.length === 2)) &&
-      abi.some(f => f.type === "function" && f.name === "redeem"),
-    script: "scripts/simulate/runOverflowUpload.ts",
-  },
+// All upload attack scripts — every uploaded contract is tested against all of them.
+// Each script handles its own applicability check and returns success:true or false.
+const UPLOAD_SCRIPTS = [
+  "scripts/simulate/runReentrancyUpload.ts",
+  "scripts/simulate/runInputValidationUpload.ts",
+  "scripts/simulate/runOverflowUpload.ts",
 ];
 
 export function uploadHandler(req: Request, res: Response) {
@@ -44,38 +25,31 @@ export function uploadHandler(req: Request, res: Response) {
     return res.status(400).json({ error: "Only .sol files are accepted." });
   }
 
-  const contractName = path.basename(originalName, ".sol");
+  const fileName = path.basename(originalName, ".sol"); // e.g. "vul" from "vul.sol"
   const destPath = path.join(UPLOADED_DIR, originalName);
 
-  // Save the uploaded file into the Hardhat contracts directory
   fs.copyFileSync(req.file.path, destPath);
   fs.unlinkSync(req.file.path);
-
   console.log(`[upload] ${originalName} → ${destPath}`);
 
-  compile(contractName)
-    .then(({ abi, contractName: realContractName }) => {
-      const matches = DETECTORS.filter(d => d.detect(abi));
-      console.log(
-        `[upload] "${realContractName}": detected [${matches.map(m => m.attack).join(", ") || "none"}]`,
-      );
+  // Compile first to get the real contract name from inside the file
+  compile(fileName)
+    .then(({ abi: _abi, contractName }) => {
+      console.log(`[upload] "${contractName}" compiled. Running all attack scripts...`);
 
-      if (matches.length === 0) {
-        return res.json({
-          contractName: realContractName,
-          message: "Compiled successfully. No known vulnerability patterns detected in the ABI.",
-          detectedPatterns: [],
-          simulations: [],
-        });
-      }
-
-      // Run each matching attack script in sequence (avoid port contention on the Hardhat node)
-      runSequential(matches.map(m => () => runUploadScript(m.script, realContractName)))
-        .then(results => {
+      // Run all 3 attack scripts sequentially — each returns a result regardless of outcome
+      runSequential(UPLOAD_SCRIPTS.map(script => () => runScript(script, contractName, fileName)))
+        .then(simulations => {
+          // A vulnerability is flagged if ETH was stolen (success) OR the pattern was confirmed (patternDetected).
+          // patternDetected covers cases like reentrancy where the code is wrong but ETH theft was blocked in this run.
+          const vulnerable = simulations.filter(
+            s => s.attack?.success === true || s.attack?.patternDetected === true,
+          );
           res.json({
-            contractName: realContractName,
-            detectedPatterns: matches.map(m => m.attack),
-            simulations: results,
+            contractName,
+            fileName: originalName,
+            vulnerabilitiesFound: vulnerable.map(s => s.attack?.type),
+            simulations,
           });
         })
         .catch(err => {
@@ -87,7 +61,6 @@ export function uploadHandler(req: Request, res: Response) {
     });
 }
 
-// Returns { abi, contractName } — the contract name comes from inside the .sol file, not the filename
 function compile(fileName: string): Promise<{ abi: any[]; contractName: string }> {
   return new Promise((resolve, reject) => {
     const proc = spawn("npx", ["hardhat", "compile"], {
@@ -96,64 +69,51 @@ function compile(fileName: string): Promise<{ abi: any[]; contractName: string }
     });
 
     let stderr = "";
-    proc.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    proc.stdout.on("data", () => {}); // drain stdout
+    proc.stderr.on("data", (c: Buffer) => { stderr += c.toString(); });
+    proc.stdout.on("data", () => {});
 
     proc.on("close", code => {
       if (code !== 0) return reject(new Error(stderr.slice(-1500)));
 
-      // Hardhat names the artifact after the contract name inside the file, not the filename.
-      // Scan the artifact folder and pick the first non-debug JSON.
-      const artifactDir = path.join(
-        HARDHAT_DIR,
-        "artifacts",
-        "contracts",
-        "uploaded",
-        `${fileName}.sol`,
-      );
-
+      // Hardhat names the artifact after the contract name, not the filename
+      const artifactDir = path.join(HARDHAT_DIR, "artifacts", "contracts", "uploaded", `${fileName}.sol`);
       try {
         const files = fs.readdirSync(artifactDir).filter(f => f.endsWith(".json") && !f.endsWith(".dbg.json"));
         if (files.length === 0) return reject(new Error(`No artifact found in ${artifactDir}`));
 
-        const artifactPath = path.join(artifactDir, files[0]);
-        const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf-8"));
+        const artifact = JSON.parse(fs.readFileSync(path.join(artifactDir, files[0]), "utf-8"));
         const contractName = path.basename(files[0], ".json");
-
-        console.log(`[upload] Compiled contract name: "${contractName}" (file: ${fileName}.sol)`);
+        console.log(`[upload] Contract name inside file: "${contractName}"`);
         resolve({ abi: artifact.abi, contractName });
       } catch (e: any) {
-        reject(new Error(`Could not read artifact from ${artifactDir}: ${e.message}`));
+        reject(new Error(`Could not read artifact: ${e.message}`));
       }
     });
   });
 }
 
-function runUploadScript(script: string, contractName: string): Promise<any> {
+function runScript(script: string, contractName: string, fileName: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const proc = spawn("npx", ["hardhat", "run", script, "--network", "localhost"], {
       cwd: HARDHAT_DIR,
       shell: true,
-      env: { ...process.env, UPLOADED_CONTRACT_NAME: contractName },
+      env: {
+        ...process.env,
+        UPLOADED_CONTRACT_NAME: contractName,
+        UPLOADED_FILE_NAME: fileName,
+      },
     });
 
     let stdout = "";
     let stderr = "";
-    proc.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    proc.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
+    proc.stdout.on("data", (c: Buffer) => { stdout += c.toString(); });
+    proc.stderr.on("data", (c: Buffer) => { stderr += c.toString(); });
 
     proc.on("close", code => {
       if (code !== 0) return reject(new Error(stderr.slice(-1000)));
 
       const resultLine = stdout.split("\n").find(l => l.startsWith("SIMULATION_RESULT:"));
-      if (!resultLine)
-        return reject(new Error("No SIMULATION_RESULT in output:\n" + stdout.slice(-500)));
+      if (!resultLine) return reject(new Error("No SIMULATION_RESULT in output:\n" + stdout.slice(-400)));
 
       try {
         resolve(JSON.parse(resultLine.replace("SIMULATION_RESULT:", "")));
@@ -164,7 +124,6 @@ function runUploadScript(script: string, contractName: string): Promise<any> {
   });
 }
 
-// Run an array of async tasks one at a time
 function runSequential<T>(tasks: Array<() => Promise<T>>): Promise<T[]> {
   return tasks.reduce(
     (chain, task) => chain.then(results => task().then(r => [...results, r])),
