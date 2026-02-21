@@ -1,23 +1,43 @@
- // SPDX-License-Identifier: MIT
-  pragma solidity ^0.8.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-  contract DrainableBank {
-      mapping(address => uint256) public balances;
+contract CrowdfundRefundVulnerable {
 
-      function deposit() external payable {
-          balances[msg.sender] += msg.value;
-      }
+    mapping(address => uint256) public contributions;
+    uint256 public totalFunds;
+    bool public campaignEnded;
 
-      // ❌ VULNERABLE: uses = 0 (idempotent) → all re-entries commit, ETH drained
-      function withdraw() external {
-          uint256 amount = balances[msg.sender];
-          require(amount > 0, "No balance");
-          (bool sent, ) = msg.sender.call{value: amount}("");
-          require(sent, "Failed");
-          balances[msg.sender] = 0;  // too late — re-entry already happened
-      }
+    // Users contribute ETH
+    function contribute() external payable {
+        require(!campaignEnded, "Campaign ended");
+        require(msg.value > 0, "Send ETH");
 
-      function getContractBalance() external view returns (uint256) {
-          return address(this).balance;
-      }
-  }
+        contributions[msg.sender] += msg.value;
+        totalFunds += msg.value;
+    }
+
+    // Owner ends campaign (simulated failure)
+    function endCampaign() external {
+        campaignEnded = true;
+    }
+
+    // ❌ VULNERABLE REFUND FUNCTION
+    function claimRefund() external {
+        require(campaignEnded, "Campaign still active");
+
+        uint256 amount = contributions[msg.sender];
+        require(amount > 0, "No contribution");
+
+        // --- External call BEFORE state update ---
+        (bool sent, ) = msg.sender.call{value: amount}("");
+        require(sent, "Refund failed");
+
+        // State update AFTER transfer → reentrancy window
+        contributions[msg.sender] = 0;
+        totalFunds -= amount;
+    }
+
+    function getContractBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+}

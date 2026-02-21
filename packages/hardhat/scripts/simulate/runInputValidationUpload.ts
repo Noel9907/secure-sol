@@ -1,6 +1,8 @@
 import hre from "hardhat";
 import { parseEther, formatEther } from "ethers";
 import { buildResult } from "./buildResult";
+import { seedVault } from "./seedVault";
+import type { ContractAnalysis } from "./analysisTypes";
 
 async function main() {
   const contractName = process.env.UPLOADED_CONTRACT_NAME;
@@ -8,7 +10,8 @@ async function main() {
   if (!contractName || !fileName) throw new Error("UPLOADED_CONTRACT_NAME and UPLOADED_FILE_NAME must be set");
 
   const startTime = Date.now();
-  const [deployer, attacker] = await hre.ethers.getSigners();
+  const signers   = await hre.ethers.getSigners();
+  const [deployer, attacker] = signers;
 
   const fullyQualified = `contracts/uploaded/${fileName}.sol:${contractName}`;
   const VictimFactory = await hre.ethers.getContractFactory(fullyQualified);
@@ -18,16 +21,75 @@ async function main() {
 
   const iface = (victim as any).interface;
 
-  // Check if this contract has the input validation pattern:
-  // withdraw(uint256) + deposit() payable
-  // ethers v6: getFunction() returns null if not found (does NOT throw)
-  const withdrawFn = iface.getFunction("withdraw");
-  const depositFn = iface.getFunction("deposit");
-  const hasPattern =
-    withdrawFn !== null &&
-    depositFn !== null &&
-    withdrawFn.inputs.length === 1 &&
-    withdrawFn.inputs[0].type === "uint256";
+  // Seed vault with pooled funds before attacking
+  const seedFn = (() => {
+    try { return process.env.ANALYSIS_JSON ? (JSON.parse(process.env.ANALYSIS_JSON) as ContractAnalysis).seedFn : null; }
+    catch { return null; }
+  })();
+  await seedVault(victim, signers, seedFn);
+
+  // --- AI-powered detection via ANALYSIS_JSON ---
+  // Gemini identifies the actual deposit/withdraw function names regardless of naming.
+  // Falls back to hardcoded "withdraw" + "deposit" if ANALYSIS_JSON is absent or invalid.
+  let withdrawFnName = "withdraw";
+  let depositFnName = "deposit";
+  let hasPattern = false;
+  let usedAiAnalysis = false;
+
+  const rawAnalysisJson = process.env.ANALYSIS_JSON;
+  if (rawAnalysisJson) {
+    try {
+      const fullAnalysis = JSON.parse(rawAnalysisJson);
+      const iv = fullAnalysis.inputvalidation;
+      // support both old field names (withdrawFunction) and new (withdrawFn)
+      const wFnObj = iv?.withdrawFn ?? iv?.withdrawFunction;
+      const dFnObj = iv?.depositFn  ?? iv?.depositFunction;
+      if (iv && typeof iv.found === "boolean" && iv.found === true && wFnObj && dFnObj) {
+        withdrawFnName = wFnObj.name;
+        depositFnName  = dFnObj.name;
+        usedAiAnalysis = true;
+        console.log(`[inputvalidation] Using Gemini analysis: withdraw=${withdrawFnName}, deposit=${depositFnName}`);
+
+        // Verify functions actually exist in ABI (guard against hallucination)
+        const wFn = iface.getFunction(withdrawFnName);
+        const dFn = iface.getFunction(depositFnName);
+        hasPattern =
+          wFn !== null &&
+          dFn !== null &&
+          wFn.inputs.length === 1 &&
+          wFn.inputs[0].type === "uint256";
+
+        if (!hasPattern) {
+          console.warn(`[inputvalidation] Gemini suggested ${withdrawFnName}/${depositFnName} but ABI check failed — trying fallback`);
+          usedAiAnalysis = false;
+        }
+      } else if (iv && typeof iv.found === "boolean" && iv.found === false) {
+        console.log(`[inputvalidation] Gemini: no input validation vulnerability detected`);
+        // keep hasPattern = false, skip to "not applicable" result
+      } else {
+        throw new Error("Invalid or missing inputvalidation field");
+      }
+    } catch (e: any) {
+      console.warn(`[inputvalidation] Could not parse ANALYSIS_JSON (${e.message}) — falling back to ABI detection`);
+    }
+  }
+
+  // Legacy fallback: check for literal "withdraw" + "deposit"
+  if (!usedAiAnalysis && !hasPattern) {
+    const wFn = iface.getFunction("withdraw");
+    const dFn = iface.getFunction("deposit");
+    hasPattern =
+      wFn !== null &&
+      dFn !== null &&
+      wFn.inputs.length === 1 &&
+      wFn.inputs[0].type === "uint256";
+
+    if (hasPattern) {
+      withdrawFnName = "withdraw";
+      depositFnName = "deposit";
+      console.log(`[inputvalidation] Fallback ABI detection: using withdraw/deposit`);
+    }
+  }
 
   if (!hasPattern) {
     const endTime = Date.now();
@@ -44,7 +106,12 @@ async function main() {
       startTime,
       endTime,
       transactions: [],
-      timeline: [`${contractName} deployed`, "No withdraw(uint256) + deposit() pattern found"],
+      timeline: [
+        `${contractName} deployed`,
+        usedAiAnalysis
+          ? "Gemini: no input validation vulnerability detected"
+          : `No ${withdrawFnName}(uint256) + ${depositFnName}() pattern found`,
+      ],
       report: {
         vulnerabilityType: "Input Validation",
         affectedFunction: "N/A",
@@ -56,8 +123,8 @@ async function main() {
     return;
   }
 
-  // Seed vault
-  await (victim as any).connect(deployer).deposit({ value: parseEther("5") });
+  // Seed vault using the detected deposit function
+  await (victim as any).connect(deployer)[depositFnName]({ value: parseEther("5") });
   const initialBalance: bigint = await hre.ethers.provider.getBalance(victimAddress);
 
   const AttackerFactory = await hre.ethers.getContractFactory("InputValidationAttacker");
@@ -65,7 +132,7 @@ async function main() {
   await attackerContract.waitForDeployment();
   const attackerAddress = await attackerContract.getAddress();
 
-  const callData = iface.encodeFunctionData("withdraw", [initialBalance]);
+  const callData = iface.encodeFunctionData(withdrawFnName, [initialBalance]);
 
   const t1 = Date.now();
   let attackSucceeded = false;
@@ -82,11 +149,13 @@ async function main() {
   const stolenAmount: bigint = initialBalance > finalBalance ? initialBalance - finalBalance : 0n;
   const attackerBal: bigint = await hre.ethers.provider.getBalance(attackerAddress);
 
+  const withdrawSig = `${withdrawFnName}(uint256)`;
+
   const result = buildResult({
     contractName,
     contractAddress: victimAddress,
     attackType: "inputvalidation",
-    targetFunction: "withdraw(uint256)",
+    targetFunction: withdrawSig,
     severity: "High",
     initialBalance,
     finalBalance,
@@ -97,7 +166,7 @@ async function main() {
       ? [
           {
             step: 1,
-            description: "Legitimate user deposits 5 ETH into vault",
+            description: `Legitimate user deposits 5 ETH into vault via ${depositFnName}()`,
             from: deployer.address,
             to: victimAddress,
             value: "5.0",
@@ -107,7 +176,7 @@ async function main() {
           },
           {
             step: 2,
-            description: `Attacker calls withdraw(${formatEther(initialBalance)} ETH) — deposited 0`,
+            description: `Attacker calls ${withdrawSig} (${formatEther(initialBalance)} ETH) — deposited 0`,
             from: attacker.address,
             to: victimAddress,
             value: formatEther(stolenAmount),
@@ -122,24 +191,24 @@ async function main() {
           `${contractName} deployed`,
           "Vault seeded with 5 ETH",
           "Attacker deposited: 0 ETH",
-          `Attacker called withdraw(${formatEther(initialBalance)})`,
+          `Attacker called ${withdrawSig}(${formatEther(initialBalance)})`,
           "No deposit check — VULNERABLE",
           "Vault drained",
         ]
       : [
           `${contractName} deployed`,
           "Vault seeded with 5 ETH",
-          `Attacker tried withdraw(${formatEther(initialBalance)}) without depositing`,
+          `Attacker tried ${withdrawSig}(${formatEther(initialBalance)}) without depositing`,
           "Contract correctly blocked the call — SAFE against input validation attack",
         ],
     report: {
       vulnerabilityType: "Input Validation",
-      affectedFunction: "withdraw(uint256)",
+      affectedFunction: withdrawSig,
       explanation: attackSucceeded
-        ? "withdraw() does not verify that the caller deposited the requested amount. Any address can withdraw the full vault balance without depositing."
-        : "Contract correctly validates that the caller's deposited balance covers the requested amount. Not vulnerable to this attack.",
+        ? `${withdrawSig} does not verify that the caller deposited the requested amount. Any address can withdraw the full vault balance without depositing.`
+        : `Contract correctly validates that the caller's deposited balance covers the requested amount. Not vulnerable to this attack.`,
       fix: attackSucceeded
-        ? "Add require(deposits[msg.sender] >= amount, 'Exceeds your deposit') before transferring ETH."
+        ? `Add require(deposits[msg.sender] >= amount, 'Exceeds your deposit') before transferring ETH.`
         : "No fix needed — input validation is correctly implemented.",
     },
   });

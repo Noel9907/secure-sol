@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 // ── Backend endpoint — matches uploadHandler POST /upload ──────────────
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE =  "http://localhost:3002";
 
 // ── Types matching backend UploadResponse ─────────────────────────────
 interface SimTransaction {
