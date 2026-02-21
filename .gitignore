@@ -21,3 +21,5 @@ node_modules
 
 # cli
 dist
+nextjs/scaffold.config.ts
+hardhat/hardhat.config.ts
