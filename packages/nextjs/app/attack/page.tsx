@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatEther, parseEther } from "viem";
+import { type Address, formatEther, parseEther } from "viem";
 import { useSendTransaction } from "wagmi";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
@@ -119,7 +119,7 @@ export default function AttackPage() {
             className="btn btn-outline w-full"
             onClick={() => {
               if (flAttackerInfo?.address) {
-                sendTransaction({ to: flAttackerInfo.address, value: parseEther("3") });
+                sendTransaction({ to: flAttackerInfo.address as Address, value: parseEther("3") });
                 setTimeout(refetchFlAttacker, 2000);
               }
             }}
