@@ -3,6 +3,7 @@ import path from "path";
 import { parseEther, formatEther } from "ethers";
 import { buildResult } from "./buildResult";
 import { analyzeReentrancy } from "./analyzeReentrancy";
+import { analyzeAccessControl } from "./analyzeAccessControl";
 import type { ContractAnalysis } from "./analysisTypes";
 import { seedVault } from "./seedVault";
 
@@ -153,18 +154,50 @@ async function main() {
     await attackerContract.waitForDeployment();
     const attackerAddress   = await attackerContract.getAddress();
 
+    // ── Try cross-function reentrancy first ──────────────────────────────────
+    // On Solidity 0.8+, re-entering the SAME withdraw(amount) causes underflow
+    // on the call stack unwind (checked arithmetic). Instead, detect an unguarded
+    // drain function (e.g. emergencyWithdrawAll) and call THAT during re-entry.
+    // This is a real cross-function reentrancy attack.
+    const sourcePath = path.join(__dirname, "../../contracts/uploaded", `${fileName}.sol`);
+    const acResult = analyzeAccessControl(sourcePath);
+    let crossFnCalldata: string | null = null;
+    let crossFnName: string | null = null;
+    if (acResult.found && acResult.restrictedFn) {
+      try {
+        crossFnCalldata = iface.encodeFunctionData(acResult.restrictedFn, []);
+        crossFnName = acResult.restrictedFn;
+        console.log(`[reentrancy] Cross-function target found: ${crossFnName}()`);
+      } catch {
+        // Function might need args we can't encode — skip
+      }
+    }
+
     const t1 = Date.now();
     let attackSucceeded = false;
-    try {
-      await (attackerContract as any).connect(attacker)
-        .attack(depositCalldata, withdrawCalldata, { value: depositAmount, gasLimit: 5_000_000 });
-      attackSucceeded = true;
-    } catch { /* may have reentrancy guard */ }
+
+    if (crossFnCalldata) {
+      // Cross-function reentrancy: withdraw triggers re-entry → re-entry calls drain function
+      try {
+        await (attackerContract as any).connect(attacker)
+          .attackCrossFn(depositCalldata, withdrawCalldata, crossFnCalldata, { value: depositAmount, gasLimit: 5_000_000 });
+        attackSucceeded = true;
+      } catch { /* may have reentrancy guard or drain fn reverted */ }
+    }
+
+    // Fall back to same-function reentrancy if cross-function didn't work
+    if (!attackSucceeded) {
+      try {
+        await (attackerContract as any).connect(attacker)
+          .attack(depositCalldata, withdrawCalldata, { value: depositAmount, gasLimit: 5_000_000 });
+        attackSucceeded = true;
+      } catch { /* may have reentrancy guard */ }
+    }
 
     await emitResult({
       hre, contractName, victimAddress, attackerAddress, attackerContract,
       vulnerableFn, depositFn, initialBalance, depositAmount, startTime, t1,
-      attackSucceeded, variant: "simple",
+      attackSucceeded, variant: "simple", crossFnName,
     });
     return;
   }
@@ -219,7 +252,7 @@ async function main() {
     await emitResult({
       hre, contractName, victimAddress, attackerAddress, attackerContract,
       vulnerableFn, depositFn: null, initialBalance, depositAmount: 0n, startTime, t1,
-      attackSucceeded, variant: "escrow",
+      attackSucceeded, variant: "escrow", crossFnName: null,
     });
     return;
   }
@@ -247,10 +280,11 @@ async function emitResult(p: {
   initialBalance: bigint; depositAmount: bigint;
   startTime: number; t1: number; attackSucceeded: boolean;
   variant: "simple" | "escrow";
+  crossFnName?: string | null;
 }) {
   const { hre, contractName, victimAddress, attackerAddress, attackerContract,
           vulnerableFn, depositFn, initialBalance, depositAmount,
-          startTime, t1, attackSucceeded, variant } = p;
+          startTime, t1, attackSucceeded, variant, crossFnName } = p;
 
   const endTime      = Date.now();
   const finalBalance = await hre.ethers.provider.getBalance(victimAddress);
@@ -301,7 +335,9 @@ async function emitResult(p: {
       `${contractName} deployed`,
       variant === "escrow" ? "Escrow setup complete — attacker credited in mapping" : `Seeded via ${depositLabel}`,
       `${fnSig} triggered — ETH sent before state update`,
-      `Re-entered ${reentryCount}×`,
+      crossFnName
+        ? `Re-entered via ${crossFnName}() — no access control`
+        : `Re-entered ${reentryCount}×`,
       exploited ? `${formatEther(stolenAmount)} ETH drained — VULNERABLE` : "Pattern confirmed — VULNERABLE",
     ] : [
       `${contractName} deployed`,
@@ -312,9 +348,13 @@ async function emitResult(p: {
       vulnerabilityType: "Reentrancy",
       affectedFunction: fnSig,
       explanation: patternDetected
-        ? `${fnSig} sends ETH to the caller before updating their balance in storage. Re-entered ${reentryCount}× — ${exploited ? `${formatEther(stolenAmount)} ETH stolen` : "pattern confirmed, no net theft in this run (attacker balance == own deposit)"}.`
+        ? crossFnName && exploited
+          ? `${fnSig} sends ETH before updating state. During re-entry, attacker called ${crossFnName}() (no access control) to drain ${formatEther(stolenAmount)} ETH. This is a cross-function reentrancy attack.`
+          : `${fnSig} sends ETH to the caller before updating their balance in storage. Re-entered ${reentryCount}× — ${exploited ? `${formatEther(stolenAmount)} ETH stolen` : "pattern confirmed, no net theft in this run (attacker balance == own deposit)"}.`
         : `Reentrancy pattern detected in ${fnSig} but attack reverted — contract may have a reentrancy guard.`,
-      fix: "Apply checks-effects-interactions: update state BEFORE the external call, or use OpenZeppelin ReentrancyGuard.",
+      fix: crossFnName
+        ? `Apply checks-effects-interactions: update state BEFORE the external call. Also add require(msg.sender == owner) to ${crossFnName}(). Use OpenZeppelin ReentrancyGuard + Ownable.`
+        : "Apply checks-effects-interactions: update state BEFORE the external call, or use OpenZeppelin ReentrancyGuard.",
     },
   });
 

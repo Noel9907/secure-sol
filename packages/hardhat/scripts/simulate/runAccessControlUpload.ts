@@ -1,7 +1,10 @@
 import hre from "hardhat";
+import path from "path";
 import { parseEther, formatEther } from "ethers";
 import { buildResult } from "./buildResult";
 import { seedVault } from "./seedVault";
+import { analyzeAccessControl } from "./analyzeAccessControl";
+import { analyzeReentrancy } from "./analyzeReentrancy";
 import type { ContractAnalysis } from "./analysisTypes";
 
 function parseArg(raw: string, type: string, attackerAddr: string, deployerAddr: string): any {
@@ -38,6 +41,31 @@ async function main() {
       seedFnFromAnalysis = parsed.seedFn ?? null;
     }
     catch { console.warn("[accesscontrol] Bad ANALYSIS_JSON"); }
+  }
+
+  // ── Regex fallback if AI didn't find anything ─────────────────────────────
+  if (!ac?.found || !ac.restrictedFn) {
+    const sourcePath = path.join(__dirname, "../../contracts/uploaded", `${fileName}.sol`);
+    const reg = analyzeAccessControl(sourcePath);
+    if (reg.found && reg.restrictedFn) {
+      console.log(`[accesscontrol] Regex fallback found: ${reg.restrictedFn}()`);
+      ac = {
+        found: true,
+        restrictedFn: reg.restrictedFn,
+        restrictedFnParamTypes: reg.restrictedFnParamTypes,
+        restrictedFnArgs: [],
+        value: "0",
+        reason: reg.reason,
+      };
+    }
+    // Also try to detect seedFn via reentrancy regex if AI didn't provide it
+    if (!seedFnFromAnalysis) {
+      const reentrancyResult = analyzeReentrancy(sourcePath);
+      if (reentrancyResult.depositFunction) {
+        seedFnFromAnalysis = reentrancyResult.depositFunction;
+        console.log(`[accesscontrol] Regex fallback seedFn: ${seedFnFromAnalysis.name}()`);
+      }
+    }
   }
 
   if (!ac?.found || !ac.restrictedFn) {

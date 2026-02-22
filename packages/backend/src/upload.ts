@@ -8,9 +8,9 @@ const HARDHAT_DIR   = path.resolve(__dirname, "../../hardhat");
 const UPLOADED_DIR  = path.join(HARDHAT_DIR, "contracts", "uploaded");
 
 const ATTACK_SCRIPTS = [
-  "scripts/simulate/runReentrancyUpload.ts",
-  "scripts/simulate/runInputValidationUpload.ts",
+    "scripts/simulate/runInputValidationUpload.ts",
   "scripts/simulate/runOverflowUpload.ts",
+  "scripts/simulate/runReentrancyUpload.ts",
   "scripts/simulate/runAccessControlUpload.ts",
 ];
 
