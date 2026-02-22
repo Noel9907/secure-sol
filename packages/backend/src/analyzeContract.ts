@@ -185,10 +185,13 @@ REENTRANCY — "escrow" variant (marketplace/escrow pattern):
 - found: true if vulnerableFn + escrowSetup both exist.
 
 INPUT VALIDATION:
-- withdrawFn: a function that takes exactly ONE uint256 param and sends ETH to the caller WITHOUT verifying the caller has deposited at least that amount (missing require(balances[msg.sender] >= amount) or equivalent). Common names: withdraw, withdrawFunds, transferBalance, cashOut, claim, pull.
+- withdrawFn: a function that subtracts from balances[msg.sender] (or equivalent mapping keyed by msg.sender) WITHOUT a prior require(balances[msg.sender] >= amount) guard. This covers:
+  * Single-param: withdraw(uint256) — paramTypes: ["uint256"]
+  * Two-param: transferBalance(address, uint256) — paramTypes: ["address","uint256"] where the second param is the unchecked amount
+  * Any similar function regardless of name where the guard is absent.
 - IMPORTANT: Do NOT pick the same function as reentrancy.vulnerableFn if a different function is the actual input-validation target. Look specifically for the missing-balance-check pattern, not re-entry.
 - depositFn: payable function that records msg.sender's deposit.
-- found: only if the balance check is genuinely absent from the withdraw-style function.
+- found: true if the balance check is genuinely absent (no require/if guard before the subtraction). Even if Solidity 0.8+ default arithmetic would revert at runtime, flag it — the missing guard is a real code-level vulnerability.
 
 OVERFLOW/UNDERFLOW:
 - tokenFn: any function that modifies a balance/reward/points mapping using unchecked arithmetic (inside "unchecked { }") such that subtracting more than the current balance wraps to uint256.max. Does NOT have to be named sendTokens or transfer — look for unchecked { mapping[x] -= amount } anywhere.

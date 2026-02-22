@@ -209,6 +209,7 @@ function UploadScreen({
       clearInterval(ticker);
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
+        console.error("Upload error:", err);
         throw new Error(err.error ?? "Upload failed");
       }
       const data: UploadResponse = await res.json();
@@ -386,8 +387,9 @@ function Dashboard({
   onReset: () => void;
 }) {
   // Best simulation: first with success/patternDetected, else first
-  const SIM: SimResult =
-    uploadData.simulations.find(s => s.attack?.success || s.attack?.patternDetected) ??
+ const SIM: SimResult =
+    uploadData.simulations.find(s => s.attack?.success) ??
+    uploadData.simulations.find(s => s.attack?.patternDetected) ??
     uploadData.simulations[0];
 
   if (!SIM) {
@@ -419,7 +421,7 @@ function Dashboard({
   uploadData.simulations.forEach(s => {
     const t = (s.attack?.type ?? "").toLowerCase().replace(/\s+/g, "");
     const hit = s.attack?.success || s.attack?.patternDetected;
-    const sc  = hit ? Math.max(100 - (s.metrics?.securityScore ?? 0), 30) : 8;
+    const sc = hit ? Math.max(100 - (s.metrics?.securityScore ?? 0), 30) : 0;  // was 8
     if (t.includes("reentr"))  vScore["Reentrancy"]    = sc;
     if (t.includes("overflow")) vScore["Overflow"]     = sc;
     if (t.includes("input"))   vScore["Input Valid."] = sc;
