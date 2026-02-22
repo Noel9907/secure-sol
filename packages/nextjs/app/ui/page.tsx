@@ -432,7 +432,6 @@ function Dashboard({
     { name: "Reentrancy",   score: vScore["Reentrancy"]   ?? 0, color: "#ef4444" },
     { name: "Overflow",     score: vScore["Overflow"]     ?? 0, color: "#f97316" },
     { name: "Input Valid.", score: vScore["Input Valid."] ?? 0, color: "#eab308" },
-    { name: "Flash Loan",   score: vScore["Flash Loan"]  ?? 0, color: "#6366f1" },
     { name: "Access Ctrl",  score: vScore["Access Ctrl"] ?? 0, color: "#22c55e" },
   ];
 
