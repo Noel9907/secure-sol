@@ -236,17 +236,17 @@ function UploadScreen({
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 9, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>⚔️</div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", lineHeight: 1 }}>ContractShield</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", lineHeight: 1 }}>Secure.sol</div>
             <div style={{ fontSize: 11, color: "#9ca3af" }}>Smart Contract Attack Simulator</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {/* <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, color: "#9ca3af", marginRight: 4 }}>Network</span>
           {NETWORKS.map(n => (
             <button key={n} onClick={() => setActiveNet(n)} style={{ padding: "5px 13px", borderRadius: 20, fontSize: 12, cursor: "pointer", border: activeNet === n ? "1.5px solid #6366f1" : "1.5px solid #e5e7eb", background: activeNet === n ? "#eef2ff" : "#fff", color: activeNet === n ? "#6366f1" : "#6b7280", fontWeight: activeNet === n ? 600 : 400, transition: "all .15s" }}>{n}</button>
           ))}
-        </div>
-        <div style={{ width: 160 }} />
+        </div> */}
+        {/* <div style={{ width: 160 }} /> */}
       </header>
 
       {/* Hero body */}
@@ -484,20 +484,20 @@ function Dashboard({
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
 
       {/* ── Header ──────────────────────────────────────────── */}
-      <header style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 32px", height: 60 }}>
+      <header style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", top: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 32px", height: 60 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 9, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>⚔️</div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", lineHeight: 1 }}>ContractShield</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", lineHeight: 1 }}>Secure.sol</div>
             <div style={{ fontSize: 11, color: "#9ca3af" }}>{SIM.contract.name} · {uploadData.fileName}</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {/* <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, color: "#9ca3af", marginRight: 4 }}>Network</span>
           {NETWORKS.map(n => (
             <button key={n} onClick={() => setActiveNet(n)} style={{ padding: "5px 13px", borderRadius: 20, fontSize: 12, cursor: "pointer", border: activeNet === n ? "1.5px solid #6366f1" : "1.5px solid #e5e7eb", background: activeNet === n ? "#eef2ff" : "#fff", color: activeNet === n ? "#6366f1" : "#6b7280", fontWeight: activeNet === n ? 600 : 400, transition: "all .15s" }}>{n}</button>
           ))}
-        </div>
+        </div> */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ padding: "6px 14px", background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, textAlign: "center" }}>
             <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 1 }}>Contract Balance</div>
