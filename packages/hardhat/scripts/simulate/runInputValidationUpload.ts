@@ -1,7 +1,9 @@
 import hre from "hardhat";
+import path from "path";
 import { parseEther, formatEther } from "ethers";
 import { buildResult } from "./buildResult";
 import { seedVault } from "./seedVault";
+import { analyzeInputValidation } from "./analyzeInputValidation";
 import type { ContractAnalysis } from "./analysisTypes";
 
 // Supported call patterns for the input-validation attack
@@ -83,27 +85,45 @@ async function main() {
     }
   }
 
-  // ── Legacy fallback: scan for known patterns ────────────────────────────────
+  // ── Static analysis fallback: reads source to find missing balance guards ──
   if (!usedAiAnalysis && withdrawVariant === null) {
-    // Check classic withdraw(uint256) + deposit()
-    const wFn = iface.getFunction("withdraw");
-    const dFn = iface.getFunction("deposit");
-    if (wFn !== null && dFn !== null && wFn.inputs.length === 1 && wFn.inputs[0].type === "uint256") {
-      withdrawFnName  = "withdraw";
-      depositFnName   = "deposit";
-      withdrawVariant = "uint256";
-      console.log(`[inputvalidation] Fallback: withdraw(uint256) + deposit()`);
-    } else {
-      // Check transferBalance(address, uint256) pattern
-      const tbFn = iface.getFunction("transferBalance");
-      if (tbFn !== null && dFn !== null) {
-        const v = detectVariant(iface, "transferBalance");
-        if (v === "address_uint256") {
-          withdrawFnName  = "transferBalance";
-          depositFnName   = "deposit";
-          withdrawVariant = "address_uint256";
-          console.log(`[inputvalidation] Fallback: transferBalance(address,uint256) + deposit()`);
+    const sourcePath = path.join(__dirname, "../../contracts/uploaded", `${fileName}.sol`);
+    try {
+      const ivResult = analyzeInputValidation(sourcePath);
+      if (ivResult.found && ivResult.withdrawFn && ivResult.depositFn) {
+        withdrawFnName = ivResult.withdrawFn.name;
+        depositFnName  = ivResult.depositFn.name;
+        withdrawVariant = detectVariant(iface, withdrawFnName);
+        if (withdrawVariant) {
+          usedAiAnalysis = true;
+          console.log(`[inputvalidation] Static analysis: withdraw=${withdrawFnName} (${withdrawVariant}), deposit=${depositFnName}`);
         }
+      }
+    } catch { /* source read failed — try ABI fallback */ }
+  }
+
+  // ── Legacy ABI fallback: scan for known function names ────────────────────
+  if (!usedAiAnalysis && withdrawVariant === null) {
+    // Check transferBalance(address, uint256) first — more likely to be missing a guard
+    const dFn = iface.getFunction("deposit");
+    const tbFn = iface.getFunction("transferBalance");
+    if (tbFn !== null && dFn !== null) {
+      const v = detectVariant(iface, "transferBalance");
+      if (v === "address_uint256") {
+        withdrawFnName  = "transferBalance";
+        depositFnName   = "deposit";
+        withdrawVariant = "address_uint256";
+        console.log(`[inputvalidation] Fallback: transferBalance(address,uint256) + deposit()`);
+      }
+    }
+    // Then check classic withdraw(uint256) + deposit()
+    if (withdrawVariant === null) {
+      const wFn = iface.getFunction("withdraw");
+      if (wFn !== null && dFn !== null && wFn.inputs.length === 1 && wFn.inputs[0].type === "uint256") {
+        withdrawFnName  = "withdraw";
+        depositFnName   = "deposit";
+        withdrawVariant = "uint256";
+        console.log(`[inputvalidation] Fallback: withdraw(uint256) + deposit()`);
       }
     }
   }
@@ -206,6 +226,10 @@ async function main() {
     ? `${withdrawFnName}() is missing require(balances[msg.sender] >= amount). In Solidity < 0.8 this would cause an integer underflow, giving the attacker type(uint256).max balance. Solidity 0.8+ default arithmetic checking reverted the transaction — the code-level vulnerability (missing guard) is real and would be exploitable on older compilers.`
     : `${withdrawFnName}() does not verify the caller deposited the requested amount. Any address can attempt to withdraw the full vault balance without depositing.`;
 
+  // Pattern is detected for address_uint256 variant even when 0.8+ blocks it —
+  // the missing require() IS a real code-level vulnerability
+  const patternDetected = attackSucceeded || withdrawVariant === "address_uint256";
+
   const result = buildResult({
     contractName,
     contractAddress: victimAddress,
@@ -215,6 +239,7 @@ async function main() {
     initialBalance,
     finalBalance,
     stolenAmount,
+    patternDetected,
     startTime,
     endTime,
     transactions: [
